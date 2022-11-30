@@ -243,4 +243,18 @@ public sealed interface Pattern {
     regex(builder);
     return builder.toString();
   }
+
+  default String escapedRegex() {
+    var builder = new StringBuilder();
+    for (var character : regex().toCharArray()) {
+      switch (character) {
+      case '\\', '"':
+        builder.append('\\');
+        //$FALL-THROUGH$
+      default:
+        builder.append(character);
+      }
+    }
+    return builder.toString();
+  }
 }

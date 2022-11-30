@@ -9,8 +9,8 @@ public class Main {
     var hexadecimal       =
       numberLiteral(Pattern.and(Pattern.one("0"), Pattern.one("xX")),
         hexadecimalDigits, Pattern.one("pP"));
-    System.out.printf("Decimal: %s%nHexadecimal: %s%n", decimal.regex(),
-      hexadecimal.regex());
+    System.out.printf("Decimal: %s%nHexadecimal: %s%n", decimal.escapedRegex(),
+      hexadecimal.escapedRegex());
   }
 
   private static Pattern numberLiteral(Pattern suffix, Pattern digit,
@@ -35,6 +35,6 @@ public class Main {
   private static Pattern plainNumber(Pattern digit) {
     var deliminator = Pattern.one("'");
     return Pattern.and(digit,
-      Pattern.zeroOrMore(Pattern.or(Pattern.optional(deliminator), digit)));
+      Pattern.zeroOrMore(Pattern.and(Pattern.optional(deliminator), digit)));
   }
 }
