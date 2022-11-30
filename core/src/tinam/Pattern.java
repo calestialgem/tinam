@@ -1,5 +1,8 @@
 package tinam;
 
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 
 public sealed interface Pattern {
@@ -13,6 +16,8 @@ public sealed interface Pattern {
       appendEscapedSet(builder, set);
       builder.append(']');
     }
+
+    @Override public void groups(List<String> list) {}
   }
 
   record Not(String set) implements Pattern {
@@ -22,16 +27,19 @@ public sealed interface Pattern {
       appendEscapedSet(builder, set);
       builder.append(']');
     }
+    @Override public void groups(List<String> list) {}
   }
 
   record Any() implements Pattern {
     @Override public void regex(StringBuilder builder) { builder.append("."); }
+    @Override public void groups(List<String> list) {}
   }
 
   record All(String characters) implements Pattern {
     @Override public void regex(StringBuilder builder) {
       appendEscaped(builder, characters);
     }
+    @Override public void groups(List<String> list) {}
   }
 
   record Range(char first, char last) implements Pattern {
@@ -40,14 +48,17 @@ public sealed interface Pattern {
       appendEscapedRange(builder, first, last);
       builder.append(']');
     }
+    @Override public void groups(List<String> list) {}
   }
 
   record Start() implements Pattern {
     @Override public void regex(StringBuilder builder) { builder.append("^"); }
+    @Override public void groups(List<String> list) {}
   }
 
   record End() implements Pattern {
     @Override public void regex(StringBuilder builder) { builder.append("$"); }
+    @Override public void groups(List<String> list) {}
   }
 
   record Or(List<Pattern> alternatives) implements Pattern {
@@ -64,6 +75,9 @@ public sealed interface Pattern {
     }
     @Override public void unitRegex(StringBuilder builder) {
       appendAsUnit(builder, this);
+    }
+    @Override public void groups(List<String> list) {
+      for (var alternative : alternatives) alternative.groups(list);
     }
 
     private boolean isJoinedSets() {
@@ -100,10 +114,13 @@ public sealed interface Pattern {
 
   record And(List<Pattern> sequence) implements Pattern {
     @Override public void regex(StringBuilder builder) {
-      for (var p : sequence) { p.unitRegex(builder); }
+      for (var pattern : sequence) { pattern.unitRegex(builder); }
     }
     @Override public void unitRegex(StringBuilder builder) {
       appendAsUnit(builder, this);
+    }
+    @Override public void groups(List<String> list) {
+      for (var pattern : sequence) pattern.groups(list);
     }
   }
 
@@ -121,6 +138,7 @@ public sealed interface Pattern {
       builder.append(maximum);
       builder.append('}');
     }
+    @Override public void groups(List<String> list) { repeated.groups(list); }
   }
 
   record InfiniteRepeat(Pattern repeated, int minimum) implements Pattern {
@@ -140,6 +158,7 @@ public sealed interface Pattern {
         builder.append('}');
       }
     }
+    @Override public void groups(List<String> list) { repeated.groups(list); }
   }
 
   record Word(Pattern pattern) implements Pattern {
@@ -151,6 +170,7 @@ public sealed interface Pattern {
     @Override public void unitRegex(StringBuilder builder) {
       appendAsUnit(builder, this);
     }
+    @Override public void groups(List<String> list) { pattern.groups(list); }
   }
 
   record Unmatched(Pattern unmatched) implements Pattern {
@@ -158,6 +178,19 @@ public sealed interface Pattern {
       builder.append("(?=");
       unmatched.regex(builder);
       builder.append(')');
+    }
+    @Override public void groups(List<String> list) { unmatched.groups(list); }
+  }
+
+  record Group(Pattern pattern, String name) implements Pattern {
+    @Override public void regex(StringBuilder builder) {
+      builder.append('(');
+      pattern.regex(builder);
+      builder.append(')');
+    }
+    @Override public void groups(List<String> list) {
+      list.add(name);
+      pattern.groups(list);
     }
   }
 
@@ -187,10 +220,22 @@ public sealed interface Pattern {
     return new Or(List.of(alternatives));
   }
 
+  static Pattern or(Collection<Pattern> alternatives) {
+    if (alternatives.size() < 2)
+      throw new RuntimeException("There must be at least 2 alternatives!");
+    return new Or(List.copyOf(alternatives));
+  }
+
   static Pattern and(Pattern... sequence) {
     if (sequence.length < 2)
       throw new RuntimeException("There must be at least 2 in sequence!");
     return new And(List.of(sequence));
+  }
+
+  static Pattern and(Collection<Pattern> sequence) {
+    if (sequence.size() < 2)
+      throw new RuntimeException("There must be at least 2 in sequence!");
+    return new And(List.copyOf(sequence));
   }
 
   static Pattern zeroOrMore(Pattern repeated) {
@@ -230,6 +275,10 @@ public sealed interface Pattern {
 
   static Pattern unmatched(Pattern unmatched) {
     return new Unmatched(unmatched);
+  }
+
+  static Pattern group(Pattern pattern, String name) {
+    return new Group(pattern, name);
   }
 
   static void validateSet(String set) {
@@ -285,6 +334,14 @@ public sealed interface Pattern {
     builder.append("(?:");
     pattern.regex(builder);
     builder.append(')');
+  }
+
+  void groups(List<String> list);
+
+  default List<String> groups() {
+    var list = new ArrayList<String>();
+    groups(list);
+    return Collections.unmodifiableList(list);
   }
 
   void regex(StringBuilder builder);
