@@ -20,7 +20,7 @@ public record Grammar(String name, String scopeName, Rule topLevel) {
     builder.append(',');
     builder
       .append("\"patterns\":[{\"include\":\"#g\"}],\"repository\":{\"g\":{");
-    topLevel.patternsTextmate(builder);
+    topLevel.ruleList(builder);
     builder.append("}}}");
   }
 

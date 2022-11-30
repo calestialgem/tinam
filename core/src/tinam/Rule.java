@@ -6,7 +6,7 @@ import java.util.Optional;
 
 public sealed interface Rule {
   record Unconditional(String scope) implements Rule {
-    @Override public void textmate(StringBuilder builder) {
+    @Override public void dictionary(StringBuilder builder) {
       builder.append('{');
       appendScope(builder, scope);
       builder.append('}');
@@ -14,7 +14,7 @@ public sealed interface Rule {
   }
 
   record Match(String scope, Pattern pattern) implements Rule {
-    @Override public void textmate(StringBuilder builder) {
+    @Override public void dictionary(StringBuilder builder) {
       builder.append('{');
       appendScope(builder, scope);
       builder.append(',');
@@ -25,30 +25,30 @@ public sealed interface Rule {
 
   record Delimitated(String scope, Pattern begin, Pattern end,
     Optional<Rule> inner) implements Rule {
-    @Override public void textmate(StringBuilder builder) {
+    @Override public void dictionary(StringBuilder builder) {
       builder.append('{');
       appendScope(builder, scope);
       appendPattern(builder, "begin", begin);
       builder.append(',');
       appendPattern(builder, "end", end);
       builder.append(',');
-      if (inner.isPresent()) { inner.get().patternsTextmate(builder); }
+      if (inner.isPresent()) { inner.get().ruleList(builder); }
       builder.append('}');
     }
   }
 
   record Combined(List<Rule> combined) implements Rule {
-    @Override public void textmate(StringBuilder builder) {
+    @Override public void dictionary(StringBuilder builder) {
       builder.append('{');
-      patternsTextmate(builder);
+      ruleList(builder);
       builder.append('}');
     }
-    @Override public void patternsTextmate(StringBuilder builder) {
+    @Override public void ruleList(StringBuilder builder) {
       builder.append("\"patterns\":[");
-      combined.get(0).textmate(builder);
+      combined.get(0).dictionary(builder);
       for (var i = 1; i < combined.size(); i++) {
         builder.append(',');
-        combined.get(i).textmate(builder);
+        combined.get(i).dictionary(builder);
       }
       builder.append("]");
     }
@@ -96,17 +96,17 @@ public sealed interface Rule {
     builder.append('"');
   }
 
-  void textmate(StringBuilder builder);
+  void dictionary(StringBuilder builder);
 
-  default void patternsTextmate(StringBuilder builder) {
+  default void ruleList(StringBuilder builder) {
     builder.append("\"patterns\":[");
-    textmate(builder);
+    dictionary(builder);
     builder.append("]");
   }
 
-  default String textmate() {
+  default String dictionary() {
     var builder = new StringBuilder();
-    textmate(builder);
+    dictionary(builder);
     return builder.toString();
   }
 }
