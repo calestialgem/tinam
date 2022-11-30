@@ -37,9 +37,7 @@ public sealed interface Pattern {
   record Range(char first, char last) implements Pattern {
     @Override public void regex(StringBuilder builder) {
       builder.append('[');
-      appendEscapedMember(builder, first);
-      builder.append('-');
-      appendEscapedCharacter(builder, last);
+      appendEscapedRange(builder, first, last);
       builder.append(']');
     }
   }
@@ -54,8 +52,8 @@ public sealed interface Pattern {
 
   record Or(List<Pattern> alternatives) implements Pattern {
     @Override public void regex(StringBuilder builder) {
-      if (isJoinedRanges()) {
-        joinedRangeRegex(builder);
+      if (isJoinedSets()) {
+        joinedSetsRegex(builder);
         return;
       }
       alternatives.get(0).unitRegex(builder);
@@ -68,22 +66,35 @@ public sealed interface Pattern {
       appendAsUnit(builder, this);
     }
 
-    private boolean isJoinedRanges() {
+    private boolean isJoinedSets() {
       for (var alternative : alternatives) {
-        if (!(alternative instanceof Range)) { return false; }
+        switch (alternative) {
+        case One one:
+          break;
+        case Range range:
+          break;
+        default:
+          return false;
+        }
       }
       return true;
     }
-    private void joinedRangeRegex(StringBuilder builder) {
+    private void joinedSetsRegex(StringBuilder builder) {
       builder.append('[');
-      for (var alternative : alternatives)
-        rangeRegex(builder, (Range) alternative);
+      for (var alternative : alternatives) {
+        switch (alternative) {
+        case One one:
+          appendEscapedSet(builder, one.set);
+          break;
+        case Range range:
+          appendEscapedRange(builder, range.first, range.last);
+          break;
+        default:
+          throw new RuntimeException(
+            "Unexpected pattern type %s!".formatted(alternative));
+        }
+      }
       builder.append(']');
-    }
-    private void rangeRegex(StringBuilder builder, Range range) {
-      appendEscapedMember(builder, range.first);
-      builder.append('-');
-      appendEscapedCharacter(builder, range.last);
     }
   }
 
@@ -236,6 +247,12 @@ public sealed interface Pattern {
     for (var member : set.toCharArray()) {
       appendEscapedMember(builder, member);
     }
+  }
+
+  static void appendEscapedRange(StringBuilder builder, char first, char last) {
+    appendEscapedMember(builder, first);
+    builder.append('-');
+    appendEscapedMember(builder, last);
   }
 
   static void appendEscapedMember(StringBuilder builder, char member) {
