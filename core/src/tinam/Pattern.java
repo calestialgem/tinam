@@ -5,119 +5,147 @@ import java.util.List;
 public sealed interface Pattern {
   record One(String set) implements Pattern {
     @Override public void regex(StringBuilder builder) {
-      builder.append("(?:[");
+      if (set.length() == 1) {
+        appendEscaped(builder, set);
+        return;
+      }
+      builder.append('[');
       appendEscapedSet(builder, set);
-      builder.append("])");
+      builder.append(']');
     }
   }
 
   record Not(String set) implements Pattern {
     @Override public void regex(StringBuilder builder) {
-      builder.append("(?:[");
+      builder.append('[');
       builder.append('^');
       appendEscapedSet(builder, set);
-      builder.append("])");
+      builder.append(']');
     }
   }
 
   record Any() implements Pattern {
-    @Override public void regex(StringBuilder builder) {
-      builder.append("(?:.)");
-    }
+    @Override public void regex(StringBuilder builder) { builder.append("."); }
   }
 
   record All(String characters) implements Pattern {
     @Override public void regex(StringBuilder builder) {
-      builder.append("(?:");
       appendEscaped(builder, characters);
-      builder.append(')');
     }
   }
 
   record Range(char first, char last) implements Pattern {
     @Override public void regex(StringBuilder builder) {
-      builder.append("(?:[");
+      builder.append('[');
       appendEscapedMember(builder, first);
       builder.append('-');
       appendEscapedCharacter(builder, last);
-      builder.append("])");
+      builder.append(']');
     }
   }
 
   record Start() implements Pattern {
-    @Override public void regex(StringBuilder builder) {
-      builder.append("(?:^)");
-    }
+    @Override public void regex(StringBuilder builder) { builder.append("^"); }
   }
 
   record End() implements Pattern {
-    @Override public void regex(StringBuilder builder) {
-      builder.append("(?:$)");
-    }
+    @Override public void regex(StringBuilder builder) { builder.append("$"); }
   }
 
   record Or(List<Pattern> alternatives) implements Pattern {
     @Override public void regex(StringBuilder builder) {
-      builder.append("(?:");
-      alternatives.get(0).regex(builder);
+      if (isJoinedRanges()) {
+        joinedRangeRegex(builder);
+        return;
+      }
+      alternatives.get(0).unitRegex(builder);
       for (var i = 1; i < alternatives.size(); i++) {
         builder.append('|');
-        alternatives.get(i).regex(builder);
+        alternatives.get(i).unitRegex(builder);
       }
-      builder.append(')');
+    }
+    @Override public void unitRegex(StringBuilder builder) {
+      appendAsUnit(builder, this);
+    }
+
+    private boolean isJoinedRanges() {
+      for (var alternative : alternatives) {
+        if (!(alternative instanceof Range)) { return false; }
+      }
+      return true;
+    }
+    private void joinedRangeRegex(StringBuilder builder) {
+      builder.append('[');
+      for (var alternative : alternatives)
+        rangeRegex(builder, (Range) alternative);
+      builder.append(']');
+    }
+    private void rangeRegex(StringBuilder builder, Range range) {
+      appendEscapedMember(builder, range.first);
+      builder.append('-');
+      appendEscapedCharacter(builder, range.last);
     }
   }
 
   record And(List<Pattern> sequence) implements Pattern {
     @Override public void regex(StringBuilder builder) {
-      builder.append("(?:");
-      for (var p : sequence) { p.regex(builder); }
-      builder.append(')');
+      for (var p : sequence) { p.unitRegex(builder); }
+    }
+    @Override public void unitRegex(StringBuilder builder) {
+      appendAsUnit(builder, this);
     }
   }
 
   record BoundedRepeat(Pattern repeated, int minimum, int maximum)
     implements Pattern {
     @Override public void regex(StringBuilder builder) {
-      builder.append("(?:");
-      repeated.regex(builder);
+      repeated.unitRegex(builder);
+      if (minimum == 0 && maximum == 1) {
+        builder.append('?');
+        return;
+      }
       builder.append('{');
       builder.append(minimum);
       builder.append(',');
       builder.append(maximum);
       builder.append('}');
-      builder.append(')');
     }
   }
 
   record InfiniteRepeat(Pattern repeated, int minimum) implements Pattern {
     @Override public void regex(StringBuilder builder) {
-      builder.append("(?:");
-      repeated.regex(builder);
-      builder.append('{');
-      builder.append(minimum);
-      builder.append(',');
-      builder.append('}');
-      builder.append(')');
+      repeated.unitRegex(builder);
+      switch (minimum) {
+      case 0:
+        builder.append('*');
+        break;
+      case 1:
+        builder.append('+');
+        break;
+      default:
+        builder.append('{');
+        builder.append(minimum);
+        builder.append(',');
+        builder.append('}');
+      }
     }
   }
 
   record Word(Pattern pattern) implements Pattern {
     @Override public void regex(StringBuilder builder) {
-      builder.append("(?:");
       builder.append("\\b");
       pattern.regex(builder);
       builder.append("\\b");
-      builder.append(')');
+    }
+    @Override public void unitRegex(StringBuilder builder) {
+      appendAsUnit(builder, this);
     }
   }
 
   record Unmatched(Pattern unmatched) implements Pattern {
     @Override public void regex(StringBuilder builder) {
-      builder.append("(?:");
       builder.append("(?=");
       unmatched.regex(builder);
-      builder.append(')');
       builder.append(')');
     }
   }
@@ -236,7 +264,15 @@ public sealed interface Pattern {
     }
   }
 
+  static void appendAsUnit(StringBuilder builder, Pattern pattern) {
+    builder.append("(?:");
+    pattern.regex(builder);
+    builder.append(')');
+  }
+
   void regex(StringBuilder builder);
+
+  default void unitRegex(StringBuilder builder) { regex(builder); }
 
   default String regex() {
     var builder = new StringBuilder();
