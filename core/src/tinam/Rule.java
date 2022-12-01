@@ -19,7 +19,7 @@ public sealed interface Rule {
     @Override public void inline(StringBuilder builder) {
       builder.append('{');
       appendScope(builder, scope);
-      appendPattern(builder, "match", pattern);
+      appendPattern(builder, "match", "captures", pattern);
       if (inner.isPresent()) { inner.get().list(builder); }
       builder.append('}');
     }
@@ -42,8 +42,8 @@ public sealed interface Rule {
     @Override public void inline(StringBuilder builder) {
       builder.append('{');
       appendScope(builder, scope);
-      appendPattern(builder, "begin", begin);
-      appendPattern(builder, "end", end);
+      appendPattern(builder, "begin", "beginCaptures", begin);
+      appendPattern(builder, "end", "endCaptures", end);
       if (inner.isPresent()) { inner.get().list(builder); }
       builder.append('}');
     }
@@ -180,12 +180,26 @@ public sealed interface Rule {
     appendMapping(builder, "name", scope);
   }
 
-  static void appendPattern(StringBuilder builder, String key,
+  static void appendPattern(StringBuilder builder, String key, String captures,
     Optional<Pattern> value) {
-    if (value.isPresent()) { appendPattern(builder, key, value.get()); }
+    if (value.isPresent()) {
+      appendPattern(builder, key, captures, value.get());
+    }
   }
-  static void appendPattern(StringBuilder builder, String key, Pattern value) {
+  static void appendPattern(StringBuilder builder, String key, String captures,
+    Pattern value) {
     appendMapping(builder, key, value.escapedRegex());
+    builder.append(',');
+    appendString(builder, captures);
+    builder.append(":{");
+    var i = 1;
+    for (var capture : value.captures()) {
+      appendComma(builder);
+      appendString(builder, String.valueOf(i++));
+      builder.append(":");
+      capture.access(builder);
+    }
+    builder.append('}');
   }
 
   static void appendMapping(StringBuilder builder, String key,
