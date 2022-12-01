@@ -1,1 +1,1 @@
-module thrice.tinam {}
+module thrice.tinam { requires tinam; }
