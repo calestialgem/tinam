@@ -16,23 +16,26 @@ public sealed interface Pattern {
       appendEscapedSet(builder, set);
       builder.append(']');
     }
-
     @Override public void groups(List<String> list) {}
+    @Override public Pattern not() { return notOne(set); }
   }
 
-  record Not(String set) implements Pattern {
+  record NotOne(String set) implements Pattern {
     @Override public void regex(StringBuilder builder) {
-      builder.append('[');
-      builder.append('^');
+      builder.append("[^");
       appendEscapedSet(builder, set);
       builder.append(']');
     }
     @Override public void groups(List<String> list) {}
+    @Override public Pattern not() { return one(set); }
   }
 
   record Any() implements Pattern {
     @Override public void regex(StringBuilder builder) { builder.append("."); }
     @Override public void groups(List<String> list) {}
+    @Override public Pattern not() {
+      throw new RuntimeException("Cannot negate any pattern!");
+    }
   }
 
   record All(String characters) implements Pattern {
@@ -40,6 +43,9 @@ public sealed interface Pattern {
       appendEscaped(builder, characters);
     }
     @Override public void groups(List<String> list) {}
+    @Override public Pattern not() {
+      throw new RuntimeException("Cannot negate all pattern!");
+    }
   }
 
   record Range(char first, char last) implements Pattern {
@@ -49,22 +55,43 @@ public sealed interface Pattern {
       builder.append(']');
     }
     @Override public void groups(List<String> list) {}
+    @Override public Pattern not() { return notRange(first, last); }
+  }
+
+  record NotRange(char first, char last) implements Pattern {
+    @Override public void regex(StringBuilder builder) {
+      builder.append("[^");
+      appendEscapedRange(builder, first, last);
+      builder.append(']');
+    }
+    @Override public void groups(List<String> list) {}
+    @Override public Pattern not() { return range(first, last); }
   }
 
   record Start() implements Pattern {
     @Override public void regex(StringBuilder builder) { builder.append("^"); }
     @Override public void groups(List<String> list) {}
+    @Override public Pattern not() {
+      throw new RuntimeException("Cannot negate start pattern!");
+    }
   }
 
   record End() implements Pattern {
     @Override public void regex(StringBuilder builder) { builder.append("$"); }
     @Override public void groups(List<String> list) {}
+    @Override public Pattern not() {
+      throw new RuntimeException("Cannot negate end pattern!");
+    }
   }
 
   record Or(List<Pattern> alternatives) implements Pattern {
     @Override public void regex(StringBuilder builder) {
       if (isJoinedSets()) {
         joinedSetsRegex(builder);
+        return;
+      }
+      if (isJoinedNotSets()) {
+        joinedNotSetsRegex(builder);
         return;
       }
       alternatives.get(0).unitRegex(builder);
@@ -78,6 +105,9 @@ public sealed interface Pattern {
     }
     @Override public void groups(List<String> list) {
       for (var alternative : alternatives) alternative.groups(list);
+    }
+    @Override public Pattern not() {
+      return Pattern.and(alternatives.stream().map(Pattern::not).toList());
     }
 
     private boolean isJoinedSets() {
@@ -110,17 +140,51 @@ public sealed interface Pattern {
       }
       builder.append(']');
     }
+
+    private boolean isJoinedNotSets() {
+      for (var alternative : alternatives) {
+        switch (alternative) {
+        case NotOne one:
+          break;
+        case NotRange range:
+          break;
+        default:
+          return false;
+        }
+      }
+      return true;
+    }
+    private void joinedNotSetsRegex(StringBuilder builder) {
+      builder.append("[^");
+      for (var alternative : alternatives) {
+        switch (alternative) {
+        case NotOne one:
+          appendEscapedSet(builder, one.set);
+          break;
+        case NotRange range:
+          appendEscapedRange(builder, range.first, range.last);
+          break;
+        default:
+          throw new RuntimeException(
+            "Unexpected pattern type %s!".formatted(alternative));
+        }
+      }
+      builder.append(']');
+    }
   }
 
   record And(List<Pattern> sequence) implements Pattern {
     @Override public void regex(StringBuilder builder) {
-      for (var pattern : sequence) { pattern.unitRegex(builder); }
+      for (var sequent : sequence) { sequent.unitRegex(builder); }
     }
     @Override public void unitRegex(StringBuilder builder) {
       appendAsUnit(builder, this);
     }
     @Override public void groups(List<String> list) {
-      for (var pattern : sequence) pattern.groups(list);
+      for (var sequent : sequence) sequent.groups(list);
+    }
+    @Override public Pattern not() {
+      return Pattern.or(sequence.stream().map(Pattern::not).toList());
     }
   }
 
@@ -139,6 +203,9 @@ public sealed interface Pattern {
       builder.append('}');
     }
     @Override public void groups(List<String> list) { repeated.groups(list); }
+    @Override public Pattern not() {
+      throw new RuntimeException("Cannot negate bounded repeat pattern!");
+    }
   }
 
   record InfiniteRepeat(Pattern repeated, int minimum) implements Pattern {
@@ -159,27 +226,24 @@ public sealed interface Pattern {
       }
     }
     @Override public void groups(List<String> list) { repeated.groups(list); }
+    @Override public Pattern not() {
+      throw new RuntimeException("Cannot negate infinite repeat pattern!");
+    }
   }
 
-  record Word(Pattern pattern) implements Pattern {
+  record Lookup(Pattern pattern, boolean wanted, boolean behind)
+    implements Pattern {
     @Override public void regex(StringBuilder builder) {
-      builder.append("\\b");
+      builder.append("(?");
+      if (behind) { builder.append('<'); }
+      builder.append(wanted ? '=' : '!');
       pattern.regex(builder);
-      builder.append("\\b");
-    }
-    @Override public void unitRegex(StringBuilder builder) {
-      appendAsUnit(builder, this);
-    }
-    @Override public void groups(List<String> list) { pattern.groups(list); }
-  }
-
-  record Unmatched(Pattern unmatched) implements Pattern {
-    @Override public void regex(StringBuilder builder) {
-      builder.append("(?=");
-      unmatched.regex(builder);
       builder.append(')');
     }
-    @Override public void groups(List<String> list) { unmatched.groups(list); }
+    @Override public void groups(List<String> list) { pattern.groups(list); }
+    @Override public Pattern not() {
+      return new Lookup(pattern, !wanted, behind);
+    }
   }
 
   record Group(Pattern pattern, String name) implements Pattern {
@@ -192,6 +256,9 @@ public sealed interface Pattern {
       list.add(name);
       pattern.groups(list);
     }
+    @Override public Pattern not() {
+      throw new RuntimeException("Cannot negate group pattern!");
+    }
   }
 
   static Pattern one(String set) {
@@ -199,9 +266,9 @@ public sealed interface Pattern {
     return new One(set);
   }
 
-  static Pattern not(String set) {
+  static Pattern notOne(String set) {
     validateSet(set);
-    return new Not(set);
+    return new NotOne(set);
   }
 
   static Pattern any() { return new Any(); }
@@ -210,32 +277,44 @@ public sealed interface Pattern {
 
   static Pattern range(char first, char last) { return new Range(first, last); }
 
+  static Pattern notRange(char first, char last) {
+    return new NotRange(first, last);
+  }
+
   static Pattern start() { return new Start(); }
 
   static Pattern end() { return new End(); }
 
   static Pattern or(Pattern... alternatives) {
-    if (alternatives.length < 2)
-      throw new RuntimeException("There must be at least 2 alternatives!");
-    return new Or(List.of(alternatives));
+    return or(List.of(alternatives));
   }
-
   static Pattern or(Collection<Pattern> alternatives) {
     if (alternatives.size() < 2)
       throw new RuntimeException("There must be at least 2 alternatives!");
-    return new Or(List.copyOf(alternatives));
+    var list = new ArrayList<Pattern>();
+    for (var alternative : alternatives) {
+      if (alternative instanceof Or or) {
+        list.addAll(or.alternatives);
+      } else {
+        list.add(alternative);
+      }
+    }
+    return new Or(list);
   }
 
-  static Pattern and(Pattern... sequence) {
-    if (sequence.length < 2)
-      throw new RuntimeException("There must be at least 2 in sequence!");
-    return new And(List.of(sequence));
-  }
-
+  static Pattern and(Pattern... sequence) { return and(List.of(sequence)); }
   static Pattern and(Collection<Pattern> sequence) {
     if (sequence.size() < 2)
       throw new RuntimeException("There must be at least 2 in sequence!");
-    return new And(List.copyOf(sequence));
+    var list = new ArrayList<Pattern>();
+    for (var sequent : sequence) {
+      if (sequent instanceof And and) {
+        list.addAll(and.sequence);
+      } else {
+        list.add(sequent);
+      }
+    }
+    return new And(list);
   }
 
   static Pattern zeroOrMore(Pattern repeated) {
@@ -271,10 +350,17 @@ public sealed interface Pattern {
     return new BoundedRepeat(repeated, minimum, maximum);
   }
 
-  static Pattern word(Pattern pattern) { return new Word(pattern); }
-
-  static Pattern unmatched(Pattern unmatched) {
-    return new Unmatched(unmatched);
+  static Pattern after(Pattern pattern) {
+    return new Lookup(pattern, true, true);
+  }
+  static Pattern notAfter(Pattern pattern) {
+    return new Lookup(pattern, false, true);
+  }
+  static Pattern before(Pattern pattern) {
+    return new Lookup(pattern, true, false);
+  }
+  static Pattern notBefore(Pattern pattern) {
+    return new Lookup(pattern, false, false);
   }
 
   static Pattern group(Pattern pattern, String name) {
@@ -335,6 +421,8 @@ public sealed interface Pattern {
     pattern.regex(builder);
     builder.append(')');
   }
+
+  Pattern not();
 
   void groups(List<String> list);
 
