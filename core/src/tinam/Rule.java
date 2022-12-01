@@ -25,7 +25,7 @@ public sealed interface Rule {
     }
     @Override public void define(StringBuilder builder) {
       appendString(builder, name.get());
-      builder.append('=');
+      builder.append(':');
       inline(builder);
     }
   }
@@ -49,7 +49,7 @@ public sealed interface Rule {
     }
     @Override public void define(StringBuilder builder) {
       appendString(builder, name.get());
-      builder.append('=');
+      builder.append(':');
       inline(builder);
     }
   }
@@ -78,7 +78,7 @@ public sealed interface Rule {
     }
     @Override public void define(StringBuilder builder) {
       appendString(builder, name.get());
-      builder.append('=');
+      builder.append(':');
       inline(builder);
       for (var member : set) {
         builder.append(',');
@@ -170,7 +170,9 @@ public sealed interface Rule {
   }
 
   static void appendInclude(StringBuilder builder, String name) {
+    builder.append('{');
     appendMapping(builder, "include", "#" + name);
+    builder.append('}');
   }
 
   static void appendScope(StringBuilder builder, Optional<String> scope) {
@@ -189,11 +191,13 @@ public sealed interface Rule {
   static void appendPattern(StringBuilder builder, String key, String captures,
     Pattern value) {
     appendMapping(builder, key, value.escapedRegex());
+    var capturedGroups = value.captures();
+    if (capturedGroups.isEmpty()) { return; }
     builder.append(',');
     appendString(builder, captures);
     builder.append(":{");
     var i = 1;
-    for (var capture : value.captures()) {
+    for (var capture : capturedGroups) {
       appendComma(builder);
       appendString(builder, String.valueOf(i++));
       builder.append(":");
@@ -216,7 +220,7 @@ public sealed interface Rule {
   static void appendComma(StringBuilder builder) {
     if (!builder.isEmpty()) {
       var last = builder.charAt(builder.length() - 1);
-      if (last != '{' || last != '[') { builder.append(','); }
+      if (last != '{' && last != '[') { builder.append(','); }
     }
   }
 
