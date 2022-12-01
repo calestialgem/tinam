@@ -1,1 +1,1 @@
-module tinam {}
+module tinam { exports tinam; }
