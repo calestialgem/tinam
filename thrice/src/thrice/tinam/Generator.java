@@ -47,6 +47,10 @@ public final class Generator {
   private final Pattern binaryNumber            =
     separate(indicatedNumber(binaryIndicator, binary, binaryExponentIndicator));
 
+  private final Pattern lineCommentIndicator = all("#");
+  private final Pattern blockCommentBegin    = all("#{");
+  private final Pattern blockCommentEnd      = all("}#");
+
   private final Rule decimalNumberRule     =
     numberRule(decimalNumber, "decimal");
   private final Rule hexadecimalNumberRule =
@@ -56,10 +60,31 @@ public final class Generator {
   private final Rule numberRule            = Rule.combined(decimalNumberRule,
     hexadecimalNumberRule, octalNumberRule, binaryNumberRule);
 
+  private final Rule blockCommentBeginPunctuationRule =
+    Rule.scope(Rule.conditional(blockCommentBegin),
+      "punctuation.definition.comment.begin.thrice");
+  private final Rule blockCommentEndPunctuationRule   =
+    Rule.scope(Rule.conditional(blockCommentEnd),
+      "punctuation.definition.comment.end.thrice");
+  private final Rule blockCommentRule                 = Rule.scope(
+    Rule.name(Rule.delimitated(captureSimple(blockCommentBeginPunctuationRule),
+      captureSimple(blockCommentEndPunctuationRule)), "comment_block"),
+    "comment.block.documentation.thrice");
+
+  private final Rule lineCommentIndicatorPunctuationRule =
+    Rule.scope(Rule.conditional(lineCommentIndicator),
+      "punctuation.definition.comment.indicator.thrice");
+  private final Rule lineCommentRule                     = Rule.scope(Rule.name(
+    Rule.delimitated(captureSimple(lineCommentIndicatorPunctuationRule), end()),
+    "comment_line"), "comment.line.number-sign.thrice");
+
+  private final Rule commentRule =
+    Rule.combined(blockCommentRule, lineCommentRule);
+
   private Generator() {}
 
   private Grammar grammar() {
-    return Grammar.combined("Thrice", "source.tr", numberRule);
+    return Grammar.combined("Thrice", "source.tr", numberRule, commentRule);
   }
 
   private Rule numberRule(Pattern pattern, String name) {
