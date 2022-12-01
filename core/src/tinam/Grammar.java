@@ -5,12 +5,12 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 
-public record Grammar(String name, String scopeName, List<Rule> topLevel) {
-  public static Grammar combined(String name, String scopeName,
+public record Grammar(String name, String extension, List<Rule> topLevel) {
+  public static Grammar combined(String name, String extension,
     Rule... combined) {
-    return combined(name, scopeName, List.of(combined));
+    return combined(name, extension, List.of(combined));
   }
-  public static Grammar combined(String name, String scopeName,
+  public static Grammar combined(String name, String extension,
     Collection<Rule> set) {
     var list = new ArrayList<Rule>();
     for (var member : set) {
@@ -20,25 +20,25 @@ public record Grammar(String name, String scopeName, List<Rule> topLevel) {
         list.add(member);
       }
     }
-    return new Grammar(name, scopeName, Collections.unmodifiableList(list));
+    return new Grammar(name, extension, Collections.unmodifiableList(list));
   }
 
   public void textmate(StringBuilder builder) {
     builder.append('{');
     appendMapping(builder, "name", name);
     builder.append(',');
-    appendMapping(builder, "scopeName", scopeName);
+    appendMapping(builder, "scopeName", "source." + extension);
     builder.append(",\"patterns\":[");
-    topLevel.get(0).access(builder);
+    topLevel.get(0).access(builder, extension);
     for (var i = 1; i < topLevel.size(); i++) {
       builder.append(',');
-      topLevel.get(i).access(builder);
+      topLevel.get(i).access(builder, extension);
     }
     builder.append("],\"repository\":{");
-    topLevel.get(0).define(builder);
+    topLevel.get(0).define(builder, extension);
     for (var i = 1; i < topLevel.size(); i++) {
       builder.append(',');
-      topLevel.get(i).define(builder);
+      topLevel.get(i).define(builder, extension);
     }
     builder.append("}}");
   }

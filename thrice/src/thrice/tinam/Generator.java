@@ -62,21 +62,20 @@ public final class Generator {
 
   private final Rule blockCommentBeginPunctuationRule =
     Rule.scope(Rule.conditional(blockCommentBegin),
-      "punctuation.definition.comment.begin.thrice");
-  private final Rule blockCommentEndPunctuationRule   =
-    Rule.scope(Rule.conditional(blockCommentEnd),
-      "punctuation.definition.comment.end.thrice");
+      "punctuation.definition.comment.begin");
+  private final Rule blockCommentEndPunctuationRule   = Rule.scope(
+    Rule.conditional(blockCommentEnd), "punctuation.definition.comment.end");
   private final Rule blockCommentRule                 = Rule.scope(
     Rule.name(Rule.delimitated(captureSimple(blockCommentBeginPunctuationRule),
       captureSimple(blockCommentEndPunctuationRule)), "comment_block"),
-    "comment.block.documentation.thrice");
+    "comment.block.documentation");
 
   private final Rule lineCommentIndicatorPunctuationRule =
     Rule.scope(Rule.conditional(lineCommentIndicator),
-      "punctuation.definition.comment.indicator.thrice");
+      "punctuation.definition.comment.indicator");
   private final Rule lineCommentRule                     = Rule.scope(Rule.name(
     Rule.delimitated(captureSimple(lineCommentIndicatorPunctuationRule), end()),
-    "comment_line"), "comment.line.number-sign.thrice");
+    "comment_line"), "comment.line.number-sign");
 
   private final Rule commentRule =
     Rule.combined(blockCommentRule, lineCommentRule);
@@ -84,12 +83,12 @@ public final class Generator {
   private Generator() {}
 
   private Grammar grammar() {
-    return Grammar.combined("Thrice", "source.tr", numberRule, commentRule);
+    return Grammar.combined("Thrice", "tr", numberRule, commentRule);
   }
 
   private Rule numberRule(Pattern pattern, String name) {
     return Rule.scope(Rule.name(Rule.conditional(pattern), "numeric_" + name),
-      "constant.numeric." + name + ".thrice");
+      "constant.numeric." + name);
   }
 
   private Pattern separate(Pattern separated) {

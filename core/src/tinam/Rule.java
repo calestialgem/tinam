@@ -9,80 +9,80 @@ import java.util.Optional;
 public sealed interface Rule {
   record Simple(Optional<String> name, Optional<String> scope,
     Optional<Pattern> pattern, Optional<Rule> inner) implements Rule {
-    @Override public void access(StringBuilder builder) {
+    @Override public void access(StringBuilder builder, String extension) {
       if (name.isPresent()) {
         appendInclude(builder, name.get());
       } else {
-        inline(builder);
+        inline(builder, extension);
       }
     }
-    @Override public void inline(StringBuilder builder) {
+    @Override public void inline(StringBuilder builder, String extension) {
       builder.append('{');
-      appendScope(builder, scope);
-      appendPattern(builder, "match", "captures", pattern);
-      if (inner.isPresent()) { inner.get().list(builder); }
+      appendScope(builder, extension, scope);
+      appendPattern(builder, extension, "match", "captures", pattern);
+      if (inner.isPresent()) { inner.get().list(builder, extension); }
       builder.append('}');
     }
-    @Override public void define(StringBuilder builder) {
+    @Override public void define(StringBuilder builder, String extension) {
       appendString(builder, name.get());
       builder.append(':');
-      inline(builder);
+      inline(builder, extension);
     }
   }
 
   record Delimitated(Optional<String> name, Optional<String> scope,
     Pattern begin, Pattern end, Optional<Rule> inner) implements Rule {
-    @Override public void access(StringBuilder builder) {
+    @Override public void access(StringBuilder builder, String extension) {
       if (name.isPresent()) {
         appendInclude(builder, name.get());
       } else {
-        inline(builder);
+        inline(builder, extension);
       }
     }
-    @Override public void inline(StringBuilder builder) {
+    @Override public void inline(StringBuilder builder, String extension) {
       builder.append('{');
-      appendScope(builder, scope);
-      appendPattern(builder, "begin", "beginCaptures", begin);
-      appendPattern(builder, "end", "endCaptures", end);
-      if (inner.isPresent()) { inner.get().list(builder); }
+      appendScope(builder, extension, scope);
+      appendPattern(builder, extension, "begin", "beginCaptures", begin);
+      appendPattern(builder, extension, "end", "endCaptures", end);
+      if (inner.isPresent()) { inner.get().list(builder, extension); }
       builder.append('}');
     }
-    @Override public void define(StringBuilder builder) {
+    @Override public void define(StringBuilder builder, String extension) {
       appendString(builder, name.get());
       builder.append(':');
-      inline(builder);
+      inline(builder, extension);
     }
   }
 
   record Combined(Optional<String> name, Optional<String> scope, List<Rule> set)
     implements Rule {
-    @Override public void access(StringBuilder builder) {
+    @Override public void access(StringBuilder builder, String extension) {
       if (name.isPresent()) {
         appendInclude(builder, name.get());
       } else {
-        inline(builder);
+        inline(builder, extension);
       }
     }
-    @Override public void inline(StringBuilder builder) {
+    @Override public void inline(StringBuilder builder, String extension) {
       builder.append('{');
-      list(builder);
+      list(builder, extension);
       builder.append('}');
     }
-    @Override public void list(StringBuilder builder) {
+    @Override public void list(StringBuilder builder, String extension) {
       builder.append("\"patterns\":[");
       for (var member : set) {
         appendComma(builder);
-        member.access(builder);
+        member.access(builder, extension);
       }
       builder.append("]");
     }
-    @Override public void define(StringBuilder builder) {
+    @Override public void define(StringBuilder builder, String extension) {
       appendString(builder, name.get());
       builder.append(':');
-      inline(builder);
+      inline(builder, extension);
       for (var member : set) {
         builder.append(',');
-        member.define(builder);
+        member.define(builder, extension);
       }
     }
   }
@@ -175,21 +175,23 @@ public sealed interface Rule {
     builder.append('}');
   }
 
-  static void appendScope(StringBuilder builder, Optional<String> scope) {
-    if (scope.isPresent()) { appendScope(builder, scope.get()); }
+  static void appendScope(StringBuilder builder, String extension,
+    Optional<String> scope) {
+    if (scope.isPresent()) { appendScope(builder, extension, scope.get()); }
   }
-  static void appendScope(StringBuilder builder, String scope) {
-    appendMapping(builder, "name", scope);
+  static void appendScope(StringBuilder builder, String extension,
+    String scope) {
+    appendMapping(builder, "name", scope + "." + extension);
   }
 
-  static void appendPattern(StringBuilder builder, String key, String captures,
-    Optional<Pattern> value) {
+  static void appendPattern(StringBuilder builder, String extension, String key,
+    String captures, Optional<Pattern> value) {
     if (value.isPresent()) {
-      appendPattern(builder, key, captures, value.get());
+      appendPattern(builder, extension, key, captures, value.get());
     }
   }
-  static void appendPattern(StringBuilder builder, String key, String captures,
-    Pattern value) {
+  static void appendPattern(StringBuilder builder, String extension, String key,
+    String captures, Pattern value) {
     appendMapping(builder, key, value.escapedRegex());
     var capturedGroups = value.captures();
     if (capturedGroups.isEmpty()) { return; }
@@ -201,7 +203,7 @@ public sealed interface Rule {
       appendComma(builder);
       appendString(builder, String.valueOf(i++));
       builder.append(":");
-      capture.access(builder);
+      capture.access(builder, extension);
     }
     builder.append('}');
   }
@@ -230,13 +232,13 @@ public sealed interface Rule {
     builder.append('"');
   }
 
-  void define(StringBuilder builder);
-  void inline(StringBuilder builder);
-  void access(StringBuilder builder);
+  void define(StringBuilder builder, String extension);
+  void inline(StringBuilder builder, String extension);
+  void access(StringBuilder builder, String extension);
 
-  default void list(StringBuilder builder) {
+  default void list(StringBuilder builder, String extension) {
     builder.append("\"patterns\":[");
-    access(builder);
+    access(builder, extension);
     builder.append("]");
   }
 }
