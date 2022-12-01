@@ -16,7 +16,7 @@ public sealed interface Pattern {
       appendEscapedSet(builder, set);
       builder.append(']');
     }
-    @Override public void groups(List<String> list) {}
+    @Override public void groups(List<Rule> list) {}
     @Override public Pattern not() { return notOne(set); }
   }
 
@@ -26,13 +26,13 @@ public sealed interface Pattern {
       appendEscapedSet(builder, set);
       builder.append(']');
     }
-    @Override public void groups(List<String> list) {}
+    @Override public void groups(List<Rule> list) {}
     @Override public Pattern not() { return one(set); }
   }
 
   record Any() implements Pattern {
     @Override public void regex(StringBuilder builder) { builder.append("."); }
-    @Override public void groups(List<String> list) {}
+    @Override public void groups(List<Rule> list) {}
     @Override public Pattern not() {
       throw new RuntimeException("Cannot negate any pattern!");
     }
@@ -42,7 +42,7 @@ public sealed interface Pattern {
     @Override public void regex(StringBuilder builder) {
       appendEscaped(builder, characters);
     }
-    @Override public void groups(List<String> list) {}
+    @Override public void groups(List<Rule> list) {}
     @Override public Pattern not() {
       throw new RuntimeException("Cannot negate all pattern!");
     }
@@ -54,7 +54,7 @@ public sealed interface Pattern {
       appendEscapedRange(builder, first, last);
       builder.append(']');
     }
-    @Override public void groups(List<String> list) {}
+    @Override public void groups(List<Rule> list) {}
     @Override public Pattern not() { return notRange(first, last); }
   }
 
@@ -64,13 +64,13 @@ public sealed interface Pattern {
       appendEscapedRange(builder, first, last);
       builder.append(']');
     }
-    @Override public void groups(List<String> list) {}
+    @Override public void groups(List<Rule> list) {}
     @Override public Pattern not() { return range(first, last); }
   }
 
   record Start() implements Pattern {
     @Override public void regex(StringBuilder builder) { builder.append("^"); }
-    @Override public void groups(List<String> list) {}
+    @Override public void groups(List<Rule> list) {}
     @Override public Pattern not() {
       throw new RuntimeException("Cannot negate start pattern!");
     }
@@ -78,7 +78,7 @@ public sealed interface Pattern {
 
   record End() implements Pattern {
     @Override public void regex(StringBuilder builder) { builder.append("$"); }
-    @Override public void groups(List<String> list) {}
+    @Override public void groups(List<Rule> list) {}
     @Override public Pattern not() {
       throw new RuntimeException("Cannot negate end pattern!");
     }
@@ -103,7 +103,7 @@ public sealed interface Pattern {
     @Override public void unitRegex(StringBuilder builder) {
       appendAsUnit(builder, this);
     }
-    @Override public void groups(List<String> list) {
+    @Override public void groups(List<Rule> list) {
       for (var alternative : alternatives) alternative.groups(list);
     }
     @Override public Pattern not() {
@@ -180,7 +180,7 @@ public sealed interface Pattern {
     @Override public void unitRegex(StringBuilder builder) {
       appendAsUnit(builder, this);
     }
-    @Override public void groups(List<String> list) {
+    @Override public void groups(List<Rule> list) {
       for (var sequent : sequence) sequent.groups(list);
     }
     @Override public Pattern not() {
@@ -202,7 +202,7 @@ public sealed interface Pattern {
       builder.append(maximum);
       builder.append('}');
     }
-    @Override public void groups(List<String> list) { repeated.groups(list); }
+    @Override public void groups(List<Rule> list) { repeated.groups(list); }
     @Override public Pattern not() {
       throw new RuntimeException("Cannot negate bounded repeat pattern!");
     }
@@ -225,7 +225,7 @@ public sealed interface Pattern {
         builder.append('}');
       }
     }
-    @Override public void groups(List<String> list) { repeated.groups(list); }
+    @Override public void groups(List<Rule> list) { repeated.groups(list); }
     @Override public Pattern not() {
       throw new RuntimeException("Cannot negate infinite repeat pattern!");
     }
@@ -240,20 +240,20 @@ public sealed interface Pattern {
       pattern.regex(builder);
       builder.append(')');
     }
-    @Override public void groups(List<String> list) { pattern.groups(list); }
+    @Override public void groups(List<Rule> list) { pattern.groups(list); }
     @Override public Pattern not() {
       return new Lookup(pattern, !wanted, behind);
     }
   }
 
-  record Group(Pattern pattern, String name) implements Pattern {
+  record Group(Pattern pattern, Rule rule) implements Pattern {
     @Override public void regex(StringBuilder builder) {
       builder.append('(');
       pattern.regex(builder);
       builder.append(')');
     }
-    @Override public void groups(List<String> list) {
-      list.add(name);
+    @Override public void groups(List<Rule> list) {
+      list.add(rule);
       pattern.groups(list);
     }
     @Override public Pattern not() {
@@ -293,8 +293,8 @@ public sealed interface Pattern {
       throw new RuntimeException("There must be at least 2 alternatives!");
     var list = new ArrayList<Pattern>();
     for (var alternative : alternatives) {
-      if (alternative instanceof Or or) {
-        list.addAll(or.alternatives);
+      if (alternative instanceof Or nested) {
+        list.addAll(nested.alternatives);
       } else {
         list.add(alternative);
       }
@@ -308,8 +308,8 @@ public sealed interface Pattern {
       throw new RuntimeException("There must be at least 2 in sequence!");
     var list = new ArrayList<Pattern>();
     for (var sequent : sequence) {
-      if (sequent instanceof And and) {
-        list.addAll(and.sequence);
+      if (sequent instanceof And nested) {
+        list.addAll(nested.sequence);
       } else {
         list.add(sequent);
       }
@@ -363,8 +363,8 @@ public sealed interface Pattern {
     return new Lookup(pattern, false, false);
   }
 
-  static Pattern group(Pattern pattern, String name) {
-    return new Group(pattern, name);
+  static Pattern group(Pattern pattern, Rule rule) {
+    return new Group(pattern, rule);
   }
 
   static void validateSet(String set) {
@@ -424,10 +424,10 @@ public sealed interface Pattern {
 
   Pattern not();
 
-  void groups(List<String> list);
+  void groups(List<Rule> list);
 
-  default List<String> groups() {
-    var list = new ArrayList<String>();
+  default List<Rule> groups() {
+    var list = new ArrayList<Rule>();
     groups(list);
     return Collections.unmodifiableList(list);
   }

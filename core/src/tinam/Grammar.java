@@ -18,10 +18,10 @@ public record Grammar(String name, String scopeName, Rule topLevel) {
     builder.append(',');
     appendMapping(builder, "scopeName", scopeName);
     builder.append(',');
-    builder
-      .append("\"patterns\":[{\"include\":\"#g\"}],\"repository\":{\"g\":{");
-    topLevel.ruleList(builder);
-    builder.append("}}}");
+    topLevel.list(builder);
+    builder.append(",\"repository\":{");
+    topLevel.define(builder);
+    builder.append("}}");
   }
 
   public String textmate() {
