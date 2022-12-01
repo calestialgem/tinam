@@ -116,22 +116,24 @@ public sealed interface Rule {
       Collections.unmodifiableList(list));
   }
 
-  static Rule name(Rule rule, String name) {
+  static Rule name(Rule rule) {
     switch (rule) {
     case Simple simple:
       if (simple.name.isPresent())
         throw new RuntimeException("Rule already has a name!");
-      return new Simple(Optional.of(name), simple.scope, simple.pattern,
-        simple.inner);
+      return new Simple(Optional.of(NameProvider.INSTANCE.get()), simple.scope,
+        simple.pattern, simple.inner);
     case Delimitated delimitated:
       if (delimitated.name.isPresent())
         throw new RuntimeException("Rule already has a name!");
-      return new Delimitated(Optional.of(name), delimitated.scope,
-        delimitated.begin, delimitated.end, delimitated.inner);
+      return new Delimitated(Optional.of(NameProvider.INSTANCE.get()),
+        delimitated.scope, delimitated.begin, delimitated.end,
+        delimitated.inner);
     case Combined combined:
       if (combined.name.isPresent())
         throw new RuntimeException("Rule already has a name!");
-      return new Combined(Optional.of(name), combined.scope, combined.set);
+      return new Combined(Optional.of(NameProvider.INSTANCE.get()),
+        combined.scope, combined.set);
     }
   }
   static Rule scope(Rule rule, String scope) {

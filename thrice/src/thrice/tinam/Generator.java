@@ -65,17 +65,17 @@ public final class Generator {
       "punctuation.definition.comment.begin");
   private final Rule blockCommentEndPunctuationRule   = Rule.scope(
     Rule.conditional(blockCommentEnd), "punctuation.definition.comment.end");
-  private final Rule blockCommentRule                 = Rule.scope(
-    Rule.name(Rule.delimitated(captureSimple(blockCommentBeginPunctuationRule),
-      captureSimple(blockCommentEndPunctuationRule)), "comment_block"),
-    "comment.block.documentation");
+  private final Rule blockCommentRule                 = Rule.name(Rule.scope(
+    Rule.delimitated(captureSimple(blockCommentBeginPunctuationRule),
+      captureSimple(blockCommentEndPunctuationRule)),
+    "comment.block.documentation"));
 
   private final Rule lineCommentIndicatorPunctuationRule =
     Rule.scope(Rule.conditional(lineCommentIndicator),
       "punctuation.definition.comment.indicator");
-  private final Rule lineCommentRule                     = Rule.scope(Rule.name(
+  private final Rule lineCommentRule                     = Rule.name(Rule.scope(
     Rule.delimitated(captureSimple(lineCommentIndicatorPunctuationRule), end()),
-    "comment_line"), "comment.line.number-sign");
+    "comment.line.number-sign"));
 
   private final Rule commentRule =
     Rule.combined(blockCommentRule, lineCommentRule);
@@ -87,8 +87,8 @@ public final class Generator {
   }
 
   private Rule numberRule(Pattern pattern, String name) {
-    return Rule.scope(Rule.name(Rule.conditional(pattern), "numeric_" + name),
-      "constant.numeric." + name);
+    return Rule
+      .name(Rule.scope(Rule.conditional(pattern), "constant.numeric." + name));
   }
 
   private Pattern separate(Pattern separated) {
