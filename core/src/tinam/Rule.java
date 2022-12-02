@@ -20,7 +20,10 @@ public sealed interface Rule {
       builder.append('{');
       appendScope(builder, extension, scope);
       appendPattern(builder, extension, "match", "captures", pattern);
-      if (inner.isPresent()) { inner.get().list(builder, extension); }
+      if (inner.isPresent()) {
+        appendComma(builder);
+        inner.get().list(builder, extension);
+      }
       builder.append('}');
     }
     @Override public void define(StringBuilder builder, String extension) {
@@ -44,7 +47,10 @@ public sealed interface Rule {
       appendScope(builder, extension, scope);
       appendPattern(builder, extension, "begin", "beginCaptures", begin);
       appendPattern(builder, extension, "end", "endCaptures", end);
-      if (inner.isPresent()) { inner.get().list(builder, extension); }
+      if (inner.isPresent()) {
+        appendComma(builder);
+        inner.get().list(builder, extension);
+      }
       builder.append('}');
     }
     @Override public void define(StringBuilder builder, String extension) {
