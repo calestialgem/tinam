@@ -3,6 +3,7 @@ package thrice.tinam;
 import tinam.Pattern;
 import tinam.Rule;
 
+import static tinam.Rule.*;
 import static tinam.Pattern.*;
 
 import tinam.Grammar;
@@ -47,14 +48,14 @@ public final class Generator {
   private final Pattern binaryNumber            =
     separate(indicatedNumber(binaryIndicator, binary, binaryExponentIndicator));
 
-  private final Pattern commentCodeDeliminator = all("`");
-  private final Pattern commentReferenceBegin  = all("[");
-  private final Pattern commentReferenceEnd    = all("]");
-  private final Pattern commentLinkBegin       = all("<");
-  private final Pattern commentLinkEnd         = all(">");
-  private final Pattern lineCommentIndicator   = all("#");
-  private final Pattern blockCommentBegin      = all("#{");
-  private final Pattern blockCommentEnd        = all("}#");
+  private final Pattern documentationCodeDeliminator = all("`");
+  private final Pattern documentationReferenceBegin  = all("[");
+  private final Pattern documentationReferenceEnd    = all("]");
+  private final Pattern documentationLinkBegin       = all("<");
+  private final Pattern documentationLinkEnd         = all(">");
+  private final Pattern lineCommentIndicator         = all("#");
+  private final Pattern blockCommentBegin            = all("#{");
+  private final Pattern blockCommentEnd              = all("}#");
 
   private final Rule decimalNumberRule     =
     numberRule(decimalNumber, "decimal");
@@ -62,48 +63,36 @@ public final class Generator {
     numberRule(hexadecimalNumber, "hexadecimal");
   private final Rule octalNumberRule       = numberRule(octalNumber, "octal");
   private final Rule binaryNumberRule      = numberRule(binaryNumber, "binary");
-  private final Rule numberRule            = Rule.combined(decimalNumberRule,
+  private final Rule numberRule            = combined(decimalNumberRule,
     hexadecimalNumberRule, octalNumberRule, binaryNumberRule);
 
-  private final Rule commentCodeRule      = Rule.name(
-    Rule.scope(Rule.delimitated(commentCodeDeliminator, commentCodeDeliminator),
-      "keyword.other.documentation.code"));
-  private final Rule commentReferenceRule = Rule.name(
-    Rule.scope(Rule.delimitated(commentReferenceBegin, commentReferenceEnd),
-      "keyword.other.documentation.reference"));
-  private final Rule commentLinkRule      =
-    Rule.name(Rule.scope(Rule.delimitated(commentLinkBegin, commentLinkEnd),
-      "keyword.other.documentation.link"));
-  private final Rule commentInnerRules    =
-    Rule.combined(commentCodeRule, commentReferenceRule, commentLinkRule);
+  private final Rule documentationCodeRule      = documentationRule(
+    documentationCodeDeliminator, documentationCodeDeliminator, "code");
+  private final Rule documentationReferenceRule = documentationRule(
+    documentationReferenceBegin, documentationReferenceEnd, "reference");
+  private final Rule documentationLinkRule      =
+    documentationRule(documentationLinkBegin, documentationLinkEnd, "link");
+  private final Rule documentationRule          = combined(
+    documentationCodeRule, documentationReferenceRule, documentationLinkRule);
 
-  private final Rule blockCommentBeginPunctuationRule =
-    Rule.scope(Rule.conditional(blockCommentBegin),
-      "punctuation.definition.comment.begin");
-  private final Rule blockCommentEndPunctuationRule   = Rule.scope(
-    Rule.conditional(blockCommentEnd), "punctuation.definition.comment.end");
-  private final Rule blockCommentRule                 =
-    Rule.name(Rule.inner(Rule.scope(
-      Rule.delimitated(captureSimple(blockCommentBeginPunctuationRule),
-        captureSimple(blockCommentEndPunctuationRule)),
-      "comment.block.documentation"), commentInnerRules));
+  private final Rule blockCommentBeginPunctuationRule = scope(
+    conditional(blockCommentBegin), "punctuation.definition.comment.begin");
+  private final Rule blockCommentEndPunctuationRule   =
+    scope(conditional(blockCommentEnd), "punctuation.definition.comment.end");
+  private final Rule blockCommentRule                 = name(inner(scope(
+    delimitated(captureSimple(blockCommentBeginPunctuationRule),
+      captureSimple(blockCommentEndPunctuationRule)),
+    "comment.block.documentation"), documentationRule));
 
   private final Rule lineCommentIndicatorPunctuationRule =
-    Rule.scope(Rule.conditional(lineCommentIndicator),
+    scope(conditional(lineCommentIndicator),
       "punctuation.definition.comment.indicator");
   private final Rule lineCommentRule                     =
-    Rule
-      .name(
-        Rule
-          .inner(
-            Rule.scope(
-              Rule.delimitated(
-                captureSimple(lineCommentIndicatorPunctuationRule), end()),
-              "comment.line.number-sign"),
-            commentInnerRules));
+    Rule.name(Rule.inner(scope(
+      delimitated(captureSimple(lineCommentIndicatorPunctuationRule), end()),
+      "comment.line.number-sign"), documentationRule));
 
-  private final Rule commentRule =
-    Rule.combined(commentInnerRules, blockCommentRule, lineCommentRule);
+  private final Rule commentRule = combined(blockCommentRule, lineCommentRule);
 
   private Generator() {}
 
@@ -111,9 +100,13 @@ public final class Generator {
     return Grammar.combined("Thrice", "tr", numberRule, commentRule);
   }
 
+  private Rule documentationRule(Pattern begin, Pattern end, String name) {
+    return scope(delimitated(begin, end),
+      "keyword.other.documentation." + name);
+  }
+
   private Rule numberRule(Pattern pattern, String name) {
-    return Rule
-      .name(Rule.scope(Rule.conditional(pattern), "constant.numeric." + name));
+    return name(scope(conditional(pattern), "constant.numeric." + name));
   }
 
   private Pattern separate(Pattern separated) {
