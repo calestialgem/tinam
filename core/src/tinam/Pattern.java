@@ -1,465 +1,124 @@
 package tinam;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 
 public sealed interface Pattern {
-  record One(String set) implements Pattern {
-    @Override public void regex(StringBuilder builder) {
-      if (set.length() == 1) {
-        appendEscaped(builder, set);
-        return;
-      }
-      builder.append('[');
-      appendEscapedSet(builder, set);
-      builder.append(']');
-    }
-    @Override public void captures(List<Rule> list) {}
-    @Override public Pattern not() { return notOne(set); }
-  }
+  record One(String set) implements Pattern {}
+  record NotOne(String set) implements Pattern {}
+  record Range(char first, char last) implements Pattern {}
+  record NotRange(char first, char last) implements Pattern {}
+  record Any() implements Pattern {}
+  record All(String characters) implements Pattern {}
+  record Start() implements Pattern {}
+  record End() implements Pattern {}
+  record Or(List<Pattern> alternatives) implements Pattern {}
+  record And(List<Pattern> sequence) implements Pattern {}
+  record Repeat(Pattern repeated, int minimum, int maximum)
+    implements Pattern {}
+  record InfiniteRepeat(Pattern repeated, int minimum) implements Pattern {}
+  record Lookup(Pattern looked, boolean wanted, boolean behind)
+    implements Pattern {}
+  record Capture(Pattern pattern, Rule rule) implements Pattern {}
 
-  record NotOne(String set) implements Pattern {
-    @Override public void regex(StringBuilder builder) {
-      builder.append("[^");
-      appendEscapedSet(builder, set);
-      builder.append(']');
-    }
-    @Override public void captures(List<Rule> list) {}
-    @Override public Pattern not() { return one(set); }
-  }
+  Any   ANY   = new Any();
+  Start START = new Start();
+  End   END   = new End();
 
-  record Any() implements Pattern {
-    @Override public void regex(StringBuilder builder) { builder.append("."); }
-    @Override public void captures(List<Rule> list) {}
-    @Override public Pattern not() {
-      throw new RuntimeException("Cannot negate any pattern!");
-    }
-  }
-
-  record All(String characters) implements Pattern {
-    @Override public void regex(StringBuilder builder) {
-      appendEscaped(builder, characters);
-    }
-    @Override public void captures(List<Rule> list) {}
-    @Override public Pattern not() {
-      throw new RuntimeException("Cannot negate all pattern!");
-    }
-  }
-
-  record Range(char first, char last) implements Pattern {
-    @Override public void regex(StringBuilder builder) {
-      builder.append('[');
-      appendEscapedRange(builder, first, last);
-      builder.append(']');
-    }
-    @Override public void captures(List<Rule> list) {}
-    @Override public Pattern not() { return notRange(first, last); }
-  }
-
-  record NotRange(char first, char last) implements Pattern {
-    @Override public void regex(StringBuilder builder) {
-      builder.append("[^");
-      appendEscapedRange(builder, first, last);
-      builder.append(']');
-    }
-    @Override public void captures(List<Rule> list) {}
-    @Override public Pattern not() { return range(first, last); }
-  }
-
-  record Start() implements Pattern {
-    @Override public void regex(StringBuilder builder) { builder.append("^"); }
-    @Override public void captures(List<Rule> list) {}
-    @Override public Pattern not() {
-      throw new RuntimeException("Cannot negate start pattern!");
-    }
-  }
-
-  record End() implements Pattern {
-    @Override public void regex(StringBuilder builder) { builder.append("$"); }
-    @Override public void captures(List<Rule> list) {}
-    @Override public Pattern not() {
-      throw new RuntimeException("Cannot negate end pattern!");
-    }
-  }
-
-  record Or(List<Pattern> alternatives) implements Pattern {
-    @Override public void regex(StringBuilder builder) {
-      if (isJoinedSets()) {
-        joinedSetsRegex(builder);
-        return;
-      }
-      if (isJoinedNotSets()) {
-        joinedNotSetsRegex(builder);
-        return;
-      }
-      alternatives.get(0).unitRegex(builder);
-      for (var i = 1; i < alternatives.size(); i++) {
-        builder.append('|');
-        alternatives.get(i).unitRegex(builder);
-      }
-    }
-    @Override public void unitRegex(StringBuilder builder) {
-      appendAsUnit(builder, this);
-    }
-    @Override public void captures(List<Rule> list) {
-      for (var alternative : alternatives) alternative.captures(list);
-    }
-    @Override public Pattern not() {
-      return Pattern.and(alternatives.stream().map(Pattern::not).toList());
-    }
-
-    private boolean isJoinedSets() {
-      for (var alternative : alternatives) {
-        switch (alternative) {
-        case One one:
-          break;
-        case Range range:
-          break;
-        default:
-          return false;
-        }
-      }
-      return true;
-    }
-    private void joinedSetsRegex(StringBuilder builder) {
-      builder.append('[');
-      for (var alternative : alternatives) {
-        switch (alternative) {
-        case One one:
-          appendEscapedSet(builder, one.set);
-          break;
-        case Range range:
-          appendEscapedRange(builder, range.first, range.last);
-          break;
-        default:
-          throw new RuntimeException(
-            "Unexpected pattern type %s!".formatted(alternative));
-        }
-      }
-      builder.append(']');
-    }
-
-    private boolean isJoinedNotSets() {
-      for (var alternative : alternatives) {
-        switch (alternative) {
-        case NotOne one:
-          break;
-        case NotRange range:
-          break;
-        default:
-          return false;
-        }
-      }
-      return true;
-    }
-    private void joinedNotSetsRegex(StringBuilder builder) {
-      builder.append("[^");
-      for (var alternative : alternatives) {
-        switch (alternative) {
-        case NotOne one:
-          appendEscapedSet(builder, one.set);
-          break;
-        case NotRange range:
-          appendEscapedRange(builder, range.first, range.last);
-          break;
-        default:
-          throw new RuntimeException(
-            "Unexpected pattern type %s!".formatted(alternative));
-        }
-      }
-      builder.append(']');
-    }
-  }
-
-  record And(List<Pattern> sequence) implements Pattern {
-    @Override public void regex(StringBuilder builder) {
-      for (var sequent : sequence) { sequent.unitRegex(builder); }
-    }
-    @Override public void unitRegex(StringBuilder builder) {
-      appendAsUnit(builder, this);
-    }
-    @Override public void captures(List<Rule> list) {
-      for (var sequent : sequence) sequent.captures(list);
-    }
-    @Override public Pattern not() {
-      return Pattern.or(sequence.stream().map(Pattern::not).toList());
-    }
-  }
-
-  record BoundedRepeat(Pattern repeated, int minimum, int maximum)
-    implements Pattern {
-    @Override public void regex(StringBuilder builder) {
-      repeated.unitRegex(builder);
-      if (minimum == 0 && maximum == 1) {
-        builder.append('?');
-        return;
-      }
-      builder.append('{');
-      builder.append(minimum);
-      builder.append(',');
-      builder.append(maximum);
-      builder.append('}');
-    }
-    @Override public void captures(List<Rule> list) { repeated.captures(list); }
-    @Override public Pattern not() {
-      throw new RuntimeException("Cannot negate bounded repeat pattern!");
-    }
-  }
-
-  record InfiniteRepeat(Pattern repeated, int minimum) implements Pattern {
-    @Override public void regex(StringBuilder builder) {
-      repeated.unitRegex(builder);
-      switch (minimum) {
-      case 0:
-        builder.append('*');
-        break;
-      case 1:
-        builder.append('+');
-        break;
-      default:
-        builder.append('{');
-        builder.append(minimum);
-        builder.append(',');
-        builder.append('}');
-      }
-    }
-    @Override public void captures(List<Rule> list) { repeated.captures(list); }
-    @Override public Pattern not() {
-      throw new RuntimeException("Cannot negate infinite repeat pattern!");
-    }
-  }
-
-  record Lookup(Pattern pattern, boolean wanted, boolean behind)
-    implements Pattern {
-    @Override public void regex(StringBuilder builder) {
-      builder.append("(?");
-      if (behind) { builder.append('<'); }
-      builder.append(wanted ? '=' : '!');
-      pattern.regex(builder);
-      builder.append(')');
-    }
-    @Override public void captures(List<Rule> list) { pattern.captures(list); }
-    @Override public Pattern not() {
-      return new Lookup(pattern, !wanted, behind);
-    }
-  }
-
-  record Capture(Pattern captured, Rule inner) implements Pattern {
-    @Override public void regex(StringBuilder builder) {
-      builder.append('(');
-      captured.regex(builder);
-      builder.append(')');
-    }
-    @Override public void captures(List<Rule> list) {
-      list.add(inner);
-      captured.captures(list);
-    }
-    @Override public Pattern not() {
-      throw new RuntimeException("Cannot negate group pattern!");
-    }
-  }
-
-  static Pattern one(String set) {
+  static One one(String set) {
     validateSet(set);
     return new One(set);
   }
-
-  static Pattern notOne(String set) {
+  static NotOne notOne(String set) {
     validateSet(set);
     return new NotOne(set);
   }
-
-  static Pattern any() { return new Any(); }
-
-  static Pattern all(String characters) { return new All(characters); }
-
-  static Pattern range(char first, char last) { return new Range(first, last); }
-
-  static Pattern notRange(char first, char last) {
+  static Range range(char first, char last) {
+    validateRange(first, last);
+    return new Range(first, last);
+  }
+  static NotRange notRange(char first, char last) {
+    validateRange(first, last);
     return new NotRange(first, last);
   }
-
-  static Pattern start() { return new Start(); }
-
-  static Pattern end() { return new End(); }
-
-  static Pattern or(Pattern... alternatives) {
-    return or(List.of(alternatives));
-  }
-  static Pattern or(Collection<Pattern> alternatives) {
+  static Any any() { return ANY; }
+  static All all(String characters) { return new All(characters); }
+  static Start start() { return START; }
+  static End end() { return END; }
+  static Or or(List<Pattern> alternatives) {
     if (alternatives.size() < 2)
-      throw new RuntimeException("There must be at least 2 alternatives!");
-    var list = new ArrayList<Pattern>();
-    for (var alternative : alternatives) {
-      if (alternative instanceof Or nested) {
-        list.addAll(nested.alternatives);
-      } else {
-        list.add(alternative);
-      }
-    }
-    return new Or(list);
+      throw new RuntimeException("Alternative count [%d] must be at least 2!"
+        .formatted(alternatives.size()));
+    return new Or(alternatives);
   }
-
-  static Pattern and(Pattern... sequence) { return and(List.of(sequence)); }
-  static Pattern and(Collection<Pattern> sequence) {
-    if (sequence.size() < 2)
-      throw new RuntimeException("There must be at least 2 in sequence!");
-    var list = new ArrayList<Pattern>();
-    for (var sequent : sequence) {
-      if (sequent instanceof And nested) {
-        list.addAll(nested.sequence);
-      } else {
-        list.add(sequent);
-      }
-    }
-    return new And(list);
+  static And and(List<Pattern> sequence) {
+    if (sequence.size() < 2) throw new RuntimeException(
+      "Sequence length [%d] must be at least 2!".formatted(sequence.size()));
+    return new And(sequence);
   }
-
-  static Pattern zeroOrMore(Pattern repeated) {
+  static Repeat optional(Pattern pattern) { return new Repeat(pattern, 0, 1); }
+  static Repeat givenOrLess(Pattern repeated, int maximum) {
+    if (maximum <= 0) throw new RuntimeException(
+      "Given or less repeat maximum [%d] must be positive!".formatted(maximum));
+    return new Repeat(repeated, 0, maximum);
+  }
+  static Repeat fixedTimes(Pattern repeated, int count) {
+    if (count < 2) throw new RuntimeException(
+      "Fixed times repeat count [%d] must be at least 2!".formatted(count));
+    return new Repeat(repeated, count, count);
+  }
+  static Repeat repeat(Pattern repeated, int minimum, int maximum) {
+    if (minimum > maximum) throw new RuntimeException(
+      "Repeat minimum [%d] cannot be bigger than the maximum [%d]!"
+        .formatted(minimum, maximum));
+    if (minimum < 0) throw new RuntimeException(
+      "Repeat minimum [%d] cannot be negative!".formatted(minimum));
+    if (maximum <= 0) throw new RuntimeException(
+      "Repeat maximum [%d] must be positive!".formatted(maximum));
+    return new Repeat(repeated, minimum, maximum);
+  }
+  static InfiniteRepeat zeroOrMore(Pattern repeated) {
     return new InfiniteRepeat(repeated, 0);
   }
-  static Pattern oneOrMore(Pattern repeated) {
+  static InfiniteRepeat oneOrMore(Pattern repeated) {
     return new InfiniteRepeat(repeated, 1);
   }
-  static Pattern givenOrMore(Pattern repeated, int minimum) {
+  static InfiniteRepeat givenOrMore(Pattern repeated, int minimum) {
+    if (minimum < 0) throw new RuntimeException(
+      "Given or more repeat minimum [%d] cannot be negative!"
+        .formatted(minimum));
     return new InfiniteRepeat(repeated, minimum);
   }
-
-  static Pattern optional(Pattern pattern) {
-    return new BoundedRepeat(pattern, 0, 1);
+  static Lookup after(Pattern looked) { return new Lookup(looked, true, true); }
+  static Lookup notAfter(Pattern looked) {
+    return new Lookup(looked, false, true);
   }
-  static Pattern givenOrLess(Pattern repeated, int maximum) {
-    if (maximum < 1) throw new RuntimeException(
-      "Given or less upper bound must be at least 1!");
-    return new BoundedRepeat(repeated, 0, maximum);
+  static Lookup before(Pattern looked) {
+    return new Lookup(looked, true, false);
   }
-  static Pattern fixedTimes(Pattern repeated, int times) {
-    if (times < 2)
-      throw new RuntimeException("Fixed repeat must be at least 2 times!");
-    return new BoundedRepeat(repeated, times, times);
+  static Lookup notBefore(Pattern looked) {
+    return new Lookup(looked, false, false);
   }
-  static Pattern repeat(Pattern repeated, int minimum, int maximum) {
-    if (maximum < minimum) throw new RuntimeException(
-      "Repeat upper bound is less than the lower bound!");
-    if (minimum == maximum && minimum < 2)
-      throw new RuntimeException("Fixed repeat must be at least 2 times!");
-    if (maximum < 1)
-      throw new RuntimeException("Repeat upper bound must be at least 1!");
-    return new BoundedRepeat(repeated, minimum, maximum);
+  static Capture capture(Rule.Conditional captured) {
+    return capture(captured.condition(), Rule.unconditional(captured.data()));
   }
-
-  static Pattern after(Pattern pattern) {
-    return new Lookup(pattern, true, true);
-  }
-  static Pattern notAfter(Pattern pattern) {
-    return new Lookup(pattern, false, true);
-  }
-  static Pattern before(Pattern pattern) {
-    return new Lookup(pattern, true, false);
-  }
-  static Pattern notBefore(Pattern pattern) {
-    return new Lookup(pattern, false, false);
-  }
-
-  static Pattern captureSimple(Rule captured) {
-    if (!(captured instanceof Rule.Simple simple)) {
-      throw new RuntimeException("Rule is not simple!");
-    }
-    return capture(simple.pattern().get(),
-      Rule.scope(Rule.unconditional(), simple.scope().get()));
-  }
-  static Pattern capture(Pattern captured, Rule inner) {
-    return new Capture(captured, inner);
+  static Capture capture(Pattern pattern, Rule rule) {
+    return new Capture(pattern, rule);
   }
 
   static void validateSet(String set) {
-    if (set.length() == 0) throw new RuntimeException("Set is empty!");
+    if (set.isEmpty()) throw new RuntimeException("Set is empty!");
     for (var i = 0; i < set.length(); i++) {
       var c         = set.charAt(i);
       int lastIndex = set.lastIndexOf(c);
       if (lastIndex != i) throw new RuntimeException(
-        "Repeating '%c' character in set at indices [%d] and [%d]!".formatted(c,
-          i, lastIndex));
+        "Set has duplicate character '%c' at multiple indices [%d, %d]!"
+          .formatted(c, i, lastIndex));
     }
   }
-
-  static void appendEscapedSet(StringBuilder builder, String set) {
-    for (var member : set.toCharArray()) {
-      appendEscapedMember(builder, member);
-    }
-  }
-
-  static void appendEscapedRange(StringBuilder builder, char first, char last) {
-    appendEscapedMember(builder, first);
-    builder.append('-');
-    appendEscapedMember(builder, last);
-  }
-
-  static void appendEscapedMember(StringBuilder builder, char member) {
-    switch (member) {
-    case '\\', '^', '[', ']', '-':
-      builder.append('\\');
-      //$FALL-THROUGH$
-    default:
-      builder.append(member);
-    }
-  }
-
-  static void appendEscaped(StringBuilder builder, String characters) {
-    for (var character : characters.toCharArray()) {
-      appendEscapedCharacter(builder, character);
-    }
-  }
-
-  static void appendEscapedCharacter(StringBuilder builder, char character) {
-    switch (character) {
-    case '\\', '^', '$', '[', ']', '(', ')', '{', '}', '.', '+', '*', '?', '!':
-      builder.append('\\');
-      //$FALL-THROUGH$
-    default:
-      builder.append(character);
-    }
-  }
-
-  static void appendAsUnit(StringBuilder builder, Pattern pattern) {
-    builder.append("(?:");
-    pattern.regex(builder);
-    builder.append(')');
-  }
-
-  Pattern not();
-
-  void captures(List<Rule> list);
-
-  default List<Rule> captures() {
-    var list = new ArrayList<Rule>();
-    captures(list);
-    return Collections.unmodifiableList(list);
-  }
-
-  void regex(StringBuilder builder);
-
-  default void unitRegex(StringBuilder builder) { regex(builder); }
-
-  default String regex() {
-    var builder = new StringBuilder();
-    regex(builder);
-    return builder.toString();
-  }
-
-  default String escapedRegex() {
-    var builder = new StringBuilder();
-    for (var character : regex().toCharArray()) {
-      switch (character) {
-      case '\\', '"':
-        builder.append('\\');
-        //$FALL-THROUGH$
-      default:
-        builder.append(character);
-      }
-    }
-    return builder.toString();
+  static void validateRange(char first, char last) {
+    if (first > last) throw new RuntimeException(
+      "First character '%c' cannot come after the last one '%c' in the range!");
+    if (first == last) throw new RuntimeException(
+      "First character is the same as the last one in the range!");
   }
 }

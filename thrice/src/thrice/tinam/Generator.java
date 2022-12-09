@@ -1,23 +1,29 @@
 package thrice.tinam;
 
-import tinam.Pattern;
-import tinam.Rule;
-
 import static tinam.Rule.*;
 import static tinam.Pattern.*;
+
+import tinam.Pattern;
+import tinam.Rule;
+import tinam.Writer;
+
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
+import java.util.List;
+import java.util.Map;
 
 import tinam.Grammar;
 
 public final class Generator {
-  public static String generate() {
-    return new Generator().grammar().textmate();
+  public static void generate(OutputStream output) {
+    Writer.write(new OutputStreamWriter(output), new Generator().grammar());
   }
 
   private final Pattern lowercase    = range('a', 'z');
   private final Pattern uppercase    = range('A', 'Z');
-  private final Pattern letter       = or(lowercase, uppercase);
+  private final Pattern letter       = or(List.of(lowercase, uppercase));
   private final Pattern decimal      = range('0', '9');
-  private final Pattern alphanumeric = or(letter, decimal);
+  private final Pattern alphanumeric = or(List.of(letter, decimal));
 
   private final Pattern fractionSeparator = all(".");
   private final Pattern digitSeparator    = all("'");
@@ -29,7 +35,7 @@ public final class Generator {
     separate(numberBody(decimal, decimalExponentIndicator));
 
   private final Pattern hexadecimal                  =
-    or(decimal, range('a', 'f'), range('A', 'F'));
+    or(List.of(decimal, range('a', 'f'), range('A', 'F')));
   private final Pattern hexadecimalIndicator         = one("xX");
   private final Pattern hexadecimalExponentIndicator = one("pP");
   private final Pattern hexadecimalNumber            =
@@ -63,8 +69,9 @@ public final class Generator {
     numberRule(hexadecimalNumber, "hexadecimal");
   private final Rule octalNumberRule       = numberRule(octalNumber, "octal");
   private final Rule binaryNumberRule      = numberRule(binaryNumber, "binary");
-  private final Rule numberRule            = combined(decimalNumberRule,
-    hexadecimalNumberRule, octalNumberRule, binaryNumberRule);
+  private final Rule numberRule            =
+    unconditional(combined(List.of(decimalNumberRule, hexadecimalNumberRule,
+      octalNumberRule, binaryNumberRule)));
 
   private final Rule documentationCodeRule      = documentationRule(
     documentationCodeDeliminator, documentationCodeDeliminator, "code");
@@ -72,60 +79,66 @@ public final class Generator {
     documentationReferenceBegin, documentationReferenceEnd, "reference");
   private final Rule documentationLinkRule      =
     documentationRule(documentationLinkBegin, documentationLinkEnd, "link");
-  private final Rule documentationRule          = combined(
-    documentationCodeRule, documentationReferenceRule, documentationLinkRule);
+  private final Rule documentationRule          =
+    unconditional(combined(List.of(documentationCodeRule,
+      documentationReferenceRule, documentationLinkRule)));
 
-  private final Rule blockCommentBeginPunctuationRule = scope(
-    conditional(blockCommentBegin), "punctuation.definition.comment.begin");
-  private final Rule blockCommentEndPunctuationRule   =
-    scope(conditional(blockCommentEnd), "punctuation.definition.comment.end");
-  private final Rule blockCommentRule                 = name(inner(scope(
-    delimitated(captureSimple(blockCommentBeginPunctuationRule),
-      captureSimple(blockCommentEndPunctuationRule)),
-    "comment.block.documentation"), documentationRule));
+  private final Conditional blockCommentBeginPunctuationRule = conditional(
+    scoped("punctuation.definition.comment.begin"), blockCommentBegin);
+  private final Conditional blockCommentEndPunctuationRule   =
+    conditional(scoped("punctuation.definition.comment.end"), blockCommentEnd);
+  private final Rule        blockCommentRule                 =
+    delimitated(data("comment.block.documentation", List.of(documentationRule)),
+      capture(blockCommentBeginPunctuationRule),
+      capture(blockCommentEndPunctuationRule));
 
-  private final Rule lineCommentIndicatorPunctuationRule =
-    scope(conditional(lineCommentIndicator),
-      "punctuation.definition.comment.indicator");
-  private final Rule lineCommentRule                     =
-    Rule.name(Rule.inner(scope(
-      delimitated(captureSimple(lineCommentIndicatorPunctuationRule), end()),
-      "comment.line.number-sign"), documentationRule));
+  private final Conditional lineCommentIndicatorPunctuationRule = conditional(
+    scoped("punctuation.definition.comment.indicator"), lineCommentIndicator);
+  private final Rule        lineCommentRule                     =
+    delimitated(data("comment.line.number-sign", List.of(documentationRule)),
+      capture(lineCommentIndicatorPunctuationRule), end());
 
-  private final Rule commentRule = combined(blockCommentRule, lineCommentRule);
+  private final Rule commentRule =
+    unconditional(combined(List.of(blockCommentRule, lineCommentRule)));
 
   private Generator() {}
 
   private Grammar grammar() {
-    return Grammar.combined("Thrice", "tr", numberRule, commentRule);
+    return Grammar.of("Thrice", "tr", List.of(numberRule, commentRule),
+      Map.ofEntries(Map.entry(numberRule, "number"),
+        Map.entry(documentationRule, "documentation")));
   }
 
-  private Rule documentationRule(Pattern begin, Pattern end, String name) {
-    return scope(delimitated(begin, end),
-      "keyword.other.documentation." + name);
+  private Rule documentationRule(Pattern initializer, Pattern terminator,
+    String name) {
+    return delimitated(scoped("keyword.other.documentation." + name),
+      initializer, terminator);
   }
 
-  private Rule numberRule(Pattern pattern, String name) {
-    return name(scope(conditional(pattern), "constant.numeric." + name));
+  private Rule numberRule(Pattern condition, String name) {
+    return conditional(scoped("constant.numeric." + name), condition);
   }
 
   private Pattern separate(Pattern separated) {
-    return and(notAfter(alphanumeric), separated, notBefore(alphanumeric));
+    return and(
+      List.of(notAfter(alphanumeric), separated, notBefore(alphanumeric)));
   }
 
   private Pattern indicatedNumber(Pattern indicator, Pattern digit,
     Pattern exponentIndicator) {
-    return and(numberIndicator, indicator,
-      numberBody(digit, exponentIndicator));
+    return and(List.of(numberIndicator, indicator,
+      numberBody(digit, exponentIndicator)));
   }
 
   private Pattern numberBody(Pattern digit, Pattern exponentIndicator) {
-    return and(plainNumber(digit),
-      optional(and(fractionSeparator, plainNumber(digit))),
-      optional(and(exponentIndicator, optional(sign), plainNumber(decimal))));
+    return and(List.of(plainNumber(digit),
+      optional(and(List.of(fractionSeparator, plainNumber(digit)))),
+      optional(and(
+        List.of(exponentIndicator, optional(sign), plainNumber(decimal))))));
   }
 
   private Pattern plainNumber(Pattern digit) {
-    return and(digit, zeroOrMore(and(optional(digitSeparator), digit)));
+    return and(List.of(digit,
+      zeroOrMore(and(List.of(optional(digitSeparator), digit)))));
   }
 }
