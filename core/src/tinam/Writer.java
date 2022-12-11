@@ -381,7 +381,7 @@ public final class Writer {
     writeEscaped('(');
     writeEscaped('?');
     if (lookup.behind()) writeEscaped('<');
-    writeEscaped(lookup.wanted() ? '?' : '!');
+    writeEscaped(lookup.wanted() ? '=' : '!');
     regex(lookup.looked());
     writeEscaped(')');
   }
