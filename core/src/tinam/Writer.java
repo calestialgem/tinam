@@ -82,7 +82,16 @@ public final class Writer {
 
   private void accessObject(Rule rule) {
     if (!written.repository().containsKey(rule)) {
-      object(rule);
+      if (rule.data().scope().isEmpty()
+        && rule instanceof Unconditional ruleAsUnconditional) {
+        accessObject(rule.data().inner().get(0));
+        for (var i = 1; i < rule.data().inner().size(); i++) {
+          writeCharacter(',');
+          accessObject(rule.data().inner().get(i));
+        }
+      } else {
+        object(rule);
+      }
       return;
     }
     writeCharacter('{');
