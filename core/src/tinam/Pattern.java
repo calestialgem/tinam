@@ -44,12 +44,14 @@ public sealed interface Pattern {
   static All all(String characters) { return new All(characters); }
   static Start start() { return START; }
   static End end() { return END; }
+  static Or or(Pattern... alternatives) { return or(List.of(alternatives)); }
   static Or or(List<Pattern> alternatives) {
     if (alternatives.size() < 2)
       throw new RuntimeException("Alternative count [%d] must be at least 2!"
         .formatted(alternatives.size()));
     return new Or(alternatives);
   }
+  static And and(Pattern... sequence) { return and(List.of(sequence)); }
   static And and(List<Pattern> sequence) {
     if (sequence.size() < 2) throw new RuntimeException(
       "Sequence length [%d] must be at least 2!".formatted(sequence.size()));

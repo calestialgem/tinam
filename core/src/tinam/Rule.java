@@ -14,8 +14,12 @@ public sealed interface Rule {
   static Data scoped(String scope) {
     return new Data(Optional.of(scope), List.of());
   }
+  static Data combined(Rule... inner) { return combined(List.of(inner)); }
   static Data combined(List<Rule> inner) {
     return new Data(Optional.empty(), inner);
+  }
+  static Data data(String scope, Rule... inner) {
+    return data(scope, List.of(inner));
   }
   static Data data(String scope, List<Rule> inner) {
     return new Data(Optional.of(scope), inner);
