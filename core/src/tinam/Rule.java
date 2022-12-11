@@ -11,6 +11,7 @@ public sealed interface Rule {
   record Delimitated(Data data, Pattern initializer, Pattern terminator)
     implements Rule {}
 
+  static Data empty() { return new Data(Optional.empty(), List.of()); }
   static Data scoped(String scope) {
     return new Data(Optional.of(scope), List.of());
   }
