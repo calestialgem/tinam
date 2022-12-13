@@ -33,7 +33,6 @@ public final class Generator {
   private final Rule loneKeyword = conditional(empty(),
     or(inline("keyword.other", all("import")),
       inline("keyword.other", all("entrypoint")),
-      inline("keyword.other", all("free")),
       inline("keyword.control", all("if")),
       inline("keyword.control", all("else")),
       inline("keyword.control", all("for")),
@@ -57,13 +56,12 @@ public final class Generator {
       inline("storage.modifier", all("alignas")),
       inline("storage.modifier", all("threadlocal"))));
 
-  private final Pattern keywordName =
-    or(all("import"), all("entrypoint"), all("free"), all("if"), all("else"),
-      all("for"), all("while"), all("do"), all("switch"), all("case"),
-      all("default"), all("fallthrough"), all("break"), all("continue"),
-      all("return"), all("var"), all("func"), all("proc"), all("interface"),
-      all("struct"), all("enum"), all("union"), all("mutable"), all("shared"),
-      all("volatile"), all("alignas"), all("threadlocal"));
+  private final Pattern keywordName = or(all("import"), all("entrypoint"),
+    all("if"), all("else"), all("for"), all("while"), all("do"), all("switch"),
+    all("case"), all("default"), all("fallthrough"), all("break"),
+    all("continue"), all("return"), all("var"), all("func"), all("proc"),
+    all("interface"), all("struct"), all("enum"), all("union"), all("mutable"),
+    all("shared"), all("volatile"), all("alignas"), all("threadlocal"));
 
   private final Pattern identifier = separate(or(and(keywordName, all("_")),
     and(or(range('a', 'z'), range('A', 'Z')),
@@ -100,8 +98,9 @@ public final class Generator {
   private final Rule variable =
     conditional(scoped("variable.other.constant"), identifier);
 
-  private final Rule operator = conditional(scoped("keyword.operator"),
-    or(all("<="), all(">="), one("^*/+-<>=?:")));
+  private final Rule operator =
+    conditional(scoped("keyword.operator"), or(all("<="), all(">="), all("=="),
+      all("!="), and(one("^*/+-&|"), all("=")), one("^*/+-<>&|=?:")));
 
   private final Rule punctuationDefinition =
     conditional(scoped("punctuation.definition"), one("(){}[]"));
