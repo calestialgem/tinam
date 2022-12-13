@@ -9,6 +9,8 @@ import tinam.Writer;
 
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -19,126 +21,163 @@ public final class Generator {
     Writer.write(new OutputStreamWriter(output), new Generator().grammar());
   }
 
-  private final Pattern lowercase    = range('a', 'z');
-  private final Pattern uppercase    = range('A', 'Z');
-  private final Pattern letter       = or(List.of(lowercase, uppercase));
-  private final Pattern decimal      = range('0', '9');
-  private final Pattern alphanumeric = or(List.of(letter, decimal));
+  private final Rule documentation = unconditional(
+    combined(delimitated(scoped("keyword.other"), all("`"), all("`")),
+      delimitated(scoped("keyword.other"), all("["), all("]")),
+      delimitated(scoped("keyword.other"), all("<"), all(">"))));
+  private final Rule comment       = unconditional(combined(
+    delimitated(data("comment.block.documentation", documentation), all("#{"),
+      all("}#")),
+    delimitated(data("comment.line", documentation), all("#"), end())));
 
-  private final Pattern fractionSeparator = all(".");
-  private final Pattern digitSeparator    = all("'");
-  private final Pattern sign              = one("+-");
-  private final Pattern numberIndicator   = all("0");
+  private final Rule loneKeyword = conditional(empty(),
+    or(inline("keyword.other", all("import")),
+      inline("keyword.other", all("entrypoint")),
+      inline("keyword.other", all("free")),
+      inline("keyword.control", all("if")),
+      inline("keyword.control", all("else")),
+      inline("keyword.control", all("for")),
+      inline("keyword.control", all("while")),
+      inline("keyword.control", all("do")),
+      inline("keyword.control", all("switch")),
+      inline("keyword.control", all("case")),
+      inline("keyword.control", all("default")),
+      inline("keyword.control", all("fallthrough")),
+      inline("keyword.control", all("break")),
+      inline("keyword.control", all("continue")),
+      inline("keyword.control", all("return")),
+      inline("storage.type", all("var")), inline("storage.type", all("func")),
+      inline("storage.type", all("proc")),
+      inline("storage.type", all("interface")),
+      inline("storage.type", all("struct")),
+      inline("storage.type", all("enum")), inline("storage.type", all("union")),
+      inline("storage.modifier", all("mutable")),
+      inline("storage.modifier", all("shared")),
+      inline("storage.modifier", all("volatile")),
+      inline("storage.modifier", all("alignas")),
+      inline("storage.modifier", all("threadlocal"))));
 
-  private final Pattern decimalExponentIndicator = one("eE");
-  private final Pattern decimalNumber            =
-    separate(numberBody(decimal, decimalExponentIndicator));
+  private final Pattern keywordName =
+    or(all("import"), all("entrypoint"), all("free"), all("if"), all("else"),
+      all("for"), all("while"), all("do"), all("switch"), all("case"),
+      all("default"), all("fallthrough"), all("break"), all("continue"),
+      all("return"), all("var"), all("func"), all("proc"), all("interface"),
+      all("struct"), all("enum"), all("union"), all("mutable"), all("shared"),
+      all("volatile"), all("alignas"), all("threadlocal"));
 
-  private final Pattern hexadecimal                  =
-    or(List.of(decimal, range('a', 'f'), range('A', 'F')));
-  private final Pattern hexadecimalIndicator         = one("xX");
-  private final Pattern hexadecimalExponentIndicator = one("pP");
-  private final Pattern hexadecimalNumber            =
-    separate(indicatedNumber(hexadecimalIndicator, hexadecimal,
-      hexadecimalExponentIndicator));
+  private final Pattern identifier = separate(or(and(keywordName, all("_")),
+    and(or(range('a', 'z'), range('A', 'Z')),
+      zeroOrMore(or(range('a', 'z'), range('A', 'Z'), range('0', '9'))),
+      notAfter(keywordName))));
 
-  private final Pattern octal                  = range('0', '7');
-  private final Pattern octalIndicator         = one("oO");
-  private final Pattern octalExponentIndicator = one("pP");
-  private final Pattern octalNumber            =
-    separate(indicatedNumber(octalIndicator, octal, octalExponentIndicator));
+  private final Conditional number = conditional(scoped("constant.numeric"),
+    or(number(range('0', '9'), one("eE")),
+      indicatedNumber(one("dD"), range('0', '9'), one("eE")),
+      indicatedNumber(one("xX"),
+        or(range('a', 'f'), range('A', 'F'), range('0', '9')), one("pP")),
+      indicatedNumber(one("oO"), range('0', '7'), one("pP")),
+      indicatedNumber(one("bB"), range('0', '1'), one("pP"))));
 
-  private final Pattern binary                  = range('0', '1');
-  private final Pattern binaryIndicator         = one("bB");
-  private final Pattern binaryExponentIndicator = one("pP");
-  private final Pattern binaryNumber            =
-    separate(indicatedNumber(binaryIndicator, binary, binaryExponentIndicator));
+  private final Rule variableDefinition =
+    conditional(scoped("meta.variable-definition"),
+      relaxed(inline("entity.name.type", or(all("var"), identifier)),
+        inline("variable.other.definition", identifier)));
 
-  private final Pattern documentationCodeDeliminator = all("`");
-  private final Pattern documentationReferenceBegin  = all("[");
-  private final Pattern documentationReferenceEnd    = all("]");
-  private final Pattern documentationLinkBegin       = all("<");
-  private final Pattern documentationLinkEnd         = all(">");
-  private final Pattern lineCommentIndicator         = all("#");
-  private final Pattern blockCommentBegin            = all("#{");
-  private final Pattern blockCommentEnd              = all("}#");
+  private final Rule property = conditional(scoped("meta.property"),
+    relaxed(inline("variable.other.constant", identifier),
+      inline("punctuation.separator", all(".")),
+      inline("variable.other.constant.property", identifier)));
 
-  private final Rule decimalNumberRule     =
-    numberRule(decimalNumber, "decimal");
-  private final Rule hexadecimalNumberRule =
-    numberRule(hexadecimalNumber, "hexadecimal");
-  private final Rule octalNumberRule       = numberRule(octalNumber, "octal");
-  private final Rule binaryNumberRule      = numberRule(binaryNumber, "binary");
-  private final Rule numberRule            =
-    unconditional(combined(List.of(decimalNumberRule, hexadecimalNumberRule,
-      octalNumberRule, binaryNumberRule)));
+  private final Rule call = conditional(scoped("meta.call"),
+    relaxed(
+      optional(relaxed(inline("variable.other.constant", identifier),
+        inline("punctuation.separator", all(".")))),
+      inline("entity.name.function", identifier), before(all("("))));
 
-  private final Rule documentationCodeRule      = documentationRule(
-    documentationCodeDeliminator, documentationCodeDeliminator, "code");
-  private final Rule documentationReferenceRule = documentationRule(
-    documentationReferenceBegin, documentationReferenceEnd, "reference");
-  private final Rule documentationLinkRule      =
-    documentationRule(documentationLinkBegin, documentationLinkEnd, "link");
-  private final Rule documentationRule          =
-    unconditional(combined(List.of(documentationCodeRule,
-      documentationReferenceRule, documentationLinkRule)));
+  private final Rule type = conditional(scoped("meta.type"),
+    relaxed(inline("entity.name.type", identifier), before(all("{"))));
 
-  private final Conditional blockCommentBeginPunctuationRule = conditional(
-    scoped("punctuation.definition.comment.begin"), blockCommentBegin);
-  private final Conditional blockCommentEndPunctuationRule   =
-    conditional(scoped("punctuation.definition.comment.end"), blockCommentEnd);
-  private final Rule        blockCommentRule                 =
-    delimitated(data("comment.block.documentation", List.of(documentationRule)),
-      capture(blockCommentBeginPunctuationRule),
-      capture(blockCommentEndPunctuationRule));
+  private final Rule variable =
+    conditional(scoped("variable.other.constant"), identifier);
 
-  private final Conditional lineCommentIndicatorPunctuationRule = conditional(
-    scoped("punctuation.definition.comment.indicator"), lineCommentIndicator);
-  private final Rule        lineCommentRule                     =
-    delimitated(data("comment.line.number-sign", List.of(documentationRule)),
-      capture(lineCommentIndicatorPunctuationRule), end());
+  private final Rule operator = conditional(scoped("keyword.operator"),
+    or(all("<="), all(">="), one("^*/+-<>=?:")));
 
-  private final Rule commentRule =
-    unconditional(combined(List.of(blockCommentRule, lineCommentRule)));
+  private final Rule punctuationDefinition =
+    conditional(scoped("punctuation.definition"), one("(){}[]"));
+  private final Rule punctuationSeparator  =
+    conditional(scoped("punctuation.separator"), one(",."));
+
+  private final Rule string =
+    delimitated(data("string.quoted.double",
+      conditional(scoped("constant.character.escape"), or(
+        and(all("\\"),
+          repeat(or(range('0', '9'), range('a', 'f'), range('A', 'F')), 1, 8)),
+        all("\\\""), all("\\\\")))),
+      all("\""), all("\""));
+
+  private final Rule rawString = delimitated(
+    data("string.quoted.other",
+      conditional(scoped("constant.character.escape"), all("``"))),
+    all("`"), all("`"));
+
+  private final Rule character =
+    delimitated(data("constant.character",
+      conditional(scoped("constant.character.escape"), or(
+        and(all("\\"),
+          repeat(or(range('0', '9'), range('a', 'f'), range('A', 'F')), 1, 8)),
+        all("\\\'"), all("\\\\")))),
+      all("'"), all("'"));
 
   private Generator() {}
 
   private Grammar grammar() {
-    return Grammar.of("Thrice", "tr", List.of(numberRule, commentRule),
-      Map.ofEntries(Map.entry(numberRule, "number"),
-        Map.entry(documentationRule, "documentation")));
-  }
-
-  private Rule documentationRule(Pattern initializer, Pattern terminator,
-    String name) {
-    return delimitated(scoped("keyword.other.documentation." + name),
-      initializer, terminator);
-  }
-
-  private Rule numberRule(Pattern condition, String name) {
-    return conditional(scoped("constant.numeric." + name), condition);
-  }
-
-  private Pattern separate(Pattern separated) {
-    return and(
-      List.of(notAfter(alphanumeric), separated, notBefore(alphanumeric)));
+    return Grammar.of("Thrice", "tr",
+      List.of(comment, number, operator, punctuationSeparator,
+        punctuationDefinition, string, rawString, character, call, property,
+        variableDefinition, type, variable, loneKeyword),
+      Map.ofEntries(Map.entry(documentation, "documentation")));
   }
 
   private Pattern indicatedNumber(Pattern indicator, Pattern digit,
     Pattern exponentIndicator) {
-    return and(List.of(numberIndicator, indicator,
-      numberBody(digit, exponentIndicator)));
+    return separate(
+      and(all("0"), indicator, numberBody(digit, exponentIndicator)));
+  }
+
+  private Pattern number(Pattern digit, Pattern exponentIndicator) {
+    return separate(numberBody(digit, exponentIndicator));
   }
 
   private Pattern numberBody(Pattern digit, Pattern exponentIndicator) {
-    return and(List.of(plainNumber(digit),
-      optional(and(List.of(fractionSeparator, plainNumber(digit)))),
-      optional(and(
-        List.of(exponentIndicator, optional(sign), plainNumber(decimal))))));
+    return and(plainNumber(digit), optional(and(all("."), plainNumber(digit))),
+      optional(and(exponentIndicator, optional(one("+-")),
+        plainNumber(range('0', '9')))));
   }
 
   private Pattern plainNumber(Pattern digit) {
-    return and(List.of(digit,
-      zeroOrMore(and(List.of(optional(digitSeparator), digit)))));
+    return and(digit, zeroOrMore(and(optional(one("'")), digit)));
+  }
+
+  private Pattern separate(Pattern word) {
+    var alphanumeric = or(range('a', 'z'), range('A', 'Z'), range('0', '9'));
+    return and(notAfter(alphanumeric), word, notBefore(alphanumeric));
+  }
+
+  private Pattern relaxed(Pattern... sequence) {
+    var relaxed = new ArrayList<Pattern>();
+    if (sequence.length > 0) {
+      var whitespace = zeroOrMore(all(" "));
+      relaxed.add(sequence[0]);
+      for (var i = 1; i < sequence.length; i++) {
+        relaxed.add(whitespace);
+        relaxed.add(sequence[i]);
+      }
+    }
+    return and(Collections.unmodifiableList(relaxed));
+  }
+
+  private Pattern inline(String scope, Pattern pattern) {
+    return capture(pattern, unconditional(scoped(scope)));
   }
 }
