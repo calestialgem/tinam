@@ -46,10 +46,12 @@ public final class Generator {
       inline("keyword.control", all("continue")),
       inline("keyword.control", all("return")),
       inline("storage.type", all("var")), inline("storage.type", all("func")),
-      inline("storage.type", all("proc")),
       inline("storage.type", all("interface")),
       inline("storage.type", all("struct")),
       inline("storage.type", all("enum")), inline("storage.type", all("union")),
+      inline("storage.modifier", all("opaque")),
+      inline("storage.modifier", all("discard")),
+      inline("storage.modifier", all("noreturn")),
       inline("storage.modifier", all("mutable")),
       inline("storage.modifier", all("shared")),
       inline("storage.modifier", all("volatile")),
@@ -59,9 +61,10 @@ public final class Generator {
   private final Pattern keywordName = or(all("import"), all("entrypoint"),
     all("if"), all("else"), all("for"), all("while"), all("do"), all("switch"),
     all("case"), all("default"), all("fallthrough"), all("break"),
-    all("continue"), all("return"), all("var"), all("func"), all("proc"),
-    all("interface"), all("struct"), all("enum"), all("union"), all("mutable"),
-    all("shared"), all("volatile"), all("alignas"), all("threadlocal"));
+    all("continue"), all("return"), all("var"), all("func"), all("interface"),
+    all("struct"), all("enum"), all("union"), all("opaque"), all("discard"),
+    all("noreturn"), all("mutable"), all("shared"), all("volatile"),
+    all("alignas"), all("threadlocal"));
 
   private final Pattern identifier = separate(or(and(keywordName, all("_")),
     and(or(range('a', 'z'), range('A', 'Z')),
