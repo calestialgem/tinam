@@ -110,26 +110,28 @@ public final class Generator {
   private final Rule punctuationSeparator  =
     conditional(scoped("punctuation.separator"), one(",."));
 
-  private final Rule string =
-    delimitated(data("string.quoted.double",
-      conditional(scoped("constant.character.escape"), or(
-        and(all("\\"),
+  private final Rule string = delimitated(
+    data("string.quoted.double",
+      conditional(scoped("constant.character.escape"),
+        or(and(all("\\"),
           repeat(or(range('0', '9'), range('a', 'f'), range('A', 'F')), 1, 8)),
-        all("\\\""), all("\\\\")))),
-      all("\""), all("\""));
+          all("\\\""), all("\\\\"))),
+      conditional(scoped("invalid"), all("\\"))),
+    all("\""), all("\""));
 
   private final Rule rawString = delimitated(
     data("string.quoted.other",
       conditional(scoped("constant.character.escape"), all("``"))),
-    all("`"), all("`"));
+    all("`"), and(all("`"), notBefore(all("`"))));
 
-  private final Rule character =
-    delimitated(data("constant.character",
-      conditional(scoped("constant.character.escape"), or(
-        and(all("\\"),
+  private final Rule character = delimitated(
+    data("constant.character",
+      conditional(scoped("constant.character.escape"),
+        or(and(all("\\"),
           repeat(or(range('0', '9'), range('a', 'f'), range('A', 'F')), 1, 8)),
-        all("\\\'"), all("\\\\")))),
-      all("'"), all("'"));
+          all("\\\'"), all("\\\\"))),
+      conditional(scoped("invalid"), all("\\"))),
+    all("'"), all("'"));
 
   private Generator() {}
 
