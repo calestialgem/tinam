@@ -84,62 +84,59 @@ public final class Generator {
       relaxed(inline("entity.name.type", or(all("var"), identifier)),
         inline("variable.other.definition", identifier)));
 
-  private final Rule property = conditional(scoped("meta.property"),
-    relaxed(inline("variable.other.constant", identifier),
-      inline("punctuation.separator", all(".")),
-      inline("variable.other.constant.property", identifier)));
-
-  private final Rule call = conditional(scoped("meta.call"),
-    relaxed(
-      optional(relaxed(inline("variable.other.constant", identifier),
-        inline("punctuation.separator", all(".")))),
-      inline("entity.name.function", identifier), before(all("("))));
-
   private final Rule type = conditional(scoped("meta.type"),
     relaxed(inline("entity.name.type", identifier), before(all("{"))));
 
+  private final Rule call     = conditional(scoped("meta.call"),
+    relaxed(inline("entity.name.function", identifier), before(all("("))));
+  private final Rule property =
+    conditional(scoped("variable.other.constant.property"),
+      relaxed(after(or(all("."), all("::"))), identifier));
   private final Rule variable =
     conditional(scoped("variable.other.constant"), identifier);
 
-  private final Rule operator =
-    conditional(scoped("keyword.operator"), or(all("<="), all(">="), all("=="),
-      all("!="), and(one("^*/+-&|"), all("=")), one("^*/+-<>&|=?:")));
+  private final Rule operator = conditional(scoped("keyword.operator"),
+    or(and(one("^*/+-&|!<>="), optional(all("="))), one("?:")));
 
   private final Rule punctuationDefinition =
     conditional(scoped("punctuation.definition"), one("(){}[]"));
   private final Rule punctuationSeparator  =
-    conditional(scoped("punctuation.separator"), one(",."));
+    conditional(scoped("punctuation.separator"), all(","));
+  private final Rule punctuationAccessor   =
+    conditional(scoped("punctuation.accessor"), or(all("."), all("::")));
 
-  private final Rule string = delimitated(
-    data("string.quoted.double",
-      conditional(scoped("constant.character.escape"),
-        or(and(all("\\"),
-          repeat(or(range('0', '9'), range('a', 'f'), range('A', 'F')), 1, 8)),
-          all("\\\""), all("\\\\"))),
-      conditional(scoped("invalid"), all("\\"))),
-    all("\""), all("\""));
+  private final Rule string =
+    delimitated(
+      data("string.quoted.double",
+        conditional(scoped("constant.character.escape"),
+          or(and(all("\\"),
+            repeat(or(range('0', '9'), range('a', 'f'), range('A', 'F')), 1,
+              8)),
+            all("\\\""), all("\\\\"))),
+        conditional(scoped("invalid.illegal"), all("\\"))),
+      all("\""), all("\""));
 
   private final Rule rawString = delimitated(
     data("string.quoted.other",
       conditional(scoped("constant.character.escape"), all("``"))),
     all("`"), and(all("`"), notBefore(all("`"))));
 
-  private final Rule character = delimitated(
-    data("constant.character",
+  private final Rule character =
+    delimitated(data("constant.character",
       conditional(scoped("constant.character.escape"),
         or(and(all("\\"),
           repeat(or(range('0', '9'), range('a', 'f'), range('A', 'F')), 1, 8)),
           all("\\\'"), all("\\\\"))),
-      conditional(scoped("invalid"), all("\\"))),
-    all("'"), all("'"));
+      conditional(scoped("invalid.illegal"), all("\\"))), all("'"), all("'"));
 
   private Generator() {}
 
   private Grammar grammar() {
     return Grammar.of("Thrice", "tr",
       List.of(comment, number, operator, punctuationSeparator,
-        punctuationDefinition, string, rawString, character, call, property,
-        variableDefinition, type, variable, loneKeyword),
+        punctuationDefinition, punctuationAccessor, string, rawString,
+        character, variableDefinition, type, call, property, variable,
+        loneKeyword),
       Map.ofEntries(Map.entry(documentation, "documentation")));
   }
 
